@@ -628,6 +628,11 @@ class App:
         note_y = H - len(bar) - 1
         if self.msg and time.time() < self.msg_until:
             self.put(note_y, 1, [(cut(self.msg, W - 2), col("amber") | curses.A_BOLD)], W - 2)
+        elif self.snap.get("new_sessions"):
+            n = len(self.snap["new_sessions"])
+            first = self.snap["new_sessions"][0]
+            note = f"새 세션이 시작되었습니다: {first.get('title') or display_name(first.get('workspace'))}" + (f" 외 {n - 1}개" if n > 1 else "") + ". a로 등록"
+            self.put(note_y, max(0, (W - width(note)) // 2), [(cut(note, W - 2), col("violet") | curses.A_BOLD)], W)
         elif self.app.get("update"):
             up = f"새 버전(v{self.app['latest']})이 나왔습니다. q로 나간 뒤 agent-dash update"
             self.put(note_y, max(0, (W - width(up)) // 2), [(up, col("blue") | curses.A_BOLD)], W)

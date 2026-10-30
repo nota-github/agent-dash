@@ -440,6 +440,28 @@ class BackgroundNoticeTest(unittest.TestCase):
         self.assertFalse(BG_RESULT_RE.search("the job keeps running in background on the server"))
 
 
+class NewSessionTest(unittest.TestCase):
+    def test_only_sessions_started_after_launch_are_offered(self):
+        with tempfile.TemporaryDirectory() as t:
+            reg = object.__new__(model.Registry)
+            reg.tracked = model.Tracked(Path(t) / "tracked.json")
+            reg._known, reg._new, reg.child_parent = None, {}, {}
+            c = lambda k, **kw: {"key": k, "agent": "claude", "tracked": False, "title": k, "workspace": "w", **kw}  # noqa: E731
+            reg._watch_new([c("old")])  # 켜질 때 이미 있던 세션은 묻지 않는다
+            cands = [c("old"), c("new1"), c("auto", kind="claude -p"), c("kid"), c("ign")]
+            reg.child_parent = {"kid": "claude:p"}
+            reg._watch_new(cands)
+            reg._cands = cands
+            reg.tracked.ignore("ign")
+            with mock.patch.object(model, "load_config", return_value={}):
+                self.assertEqual([x["key"] for x in reg.new_sessions()], ["new1"])
+                reg._cands = [c("new1", tracked=True)]
+                self.assertEqual(reg.new_sessions(), [])
+            with mock.patch.object(model, "load_config", return_value={"ask_new_sessions": False}):
+                reg._cands = cands
+                self.assertEqual(reg.new_sessions(), [])
+
+
 class LaunchTest(unittest.TestCase):
     def test_launch_is_remote_or_cli(self):
         L = model.launch_of

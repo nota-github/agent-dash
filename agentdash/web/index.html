@@ -41,6 +41,13 @@ header .right { display: flex; justify-content: flex-end; align-items: center; g
 .brand h1 { margin: 0; font-size: 34px; font-weight: 750; letter-spacing: -.02em; background: linear-gradient(90deg, #6b54d6, #3b76e8 50%, #1f9c8c); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .brand .sub { font-size: 12px; color: var(--text-3); }
 .update { text-align: center; padding: 6px 24px 0; }
+.newsess { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 24px 0; }
+.nsrow { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.85); border: 1px solid var(--line-2); border-left: 3px solid var(--violet); border-radius: 12px; padding: 6px 8px 6px 12px; font-size: 13px; max-width: min(760px, 100%); box-shadow: 0 2px 8px rgba(31,36,48,.06); }
+.nsrow .nst { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nsrow .nst b { font-weight: 700; }
+.nsrow .nsm { color: var(--text-3); font-size: 12px; }
+.nsrow button { font-size: 12.5px; padding: 3px 10px; }
+.nsrow button.ns-add { background: var(--violet); border-color: var(--violet); color: #fff; font-weight: 650; }
 .upd { display: inline-flex; align-items: center; gap: 6px; background: var(--blue-bg); color: var(--blue-tx); border-radius: 999px; padding: 5px 14px; font-size: 12.5px; font-weight: 650; }
 .upd code { font-family: var(--mono); background: #2b2f37; color: #8fcf9f; border-radius: 6px; padding: 1px 7px; font-weight: 500; }
 #ver { font-family: var(--mono); color: var(--text-3); margin-left: 4px; }
@@ -313,6 +320,7 @@ button.primary:hover { background: #343b4a; }
   </div>
 </header>
 <div class="update" id="update"></div>
+<div class="newsess" id="newsess"></div>
 <div class="summary" id="summary"></div>
 <div class="filters" id="filters"></div>
 <div class="toolbar">
@@ -449,6 +457,21 @@ function statusRing(status) {
     : `<circle cx="32" cy="32" r="${r}" fill="none" stroke="${color}" stroke-width="7" opacity=".9"/><g stroke="${color}">${GLYPH[status] || ""}</g>`;
   return `<svg class="ring" width="64" height="64" viewBox="0 0 64 64"><title>${label}</title><circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--track)" stroke-width="7"/>${body}</svg>`;
 }
+// 새 세션 알림: 대시보드가 켜진 뒤 시작된, 아직 등록하지 않은 세션
+function renderNew() {
+  const list = state.new_sessions || [];
+  const row = (c) => `<div class="nsrow">${icon("spark")}<span class="nst">새 세션이 시작되었습니다: <b>${esc(c.title || displayName(c.workspace) || "제목 없음")}</b> <span class="nsm">${esc(displayName(c.workspace))}, ${c.agent === "codex" ? "Codex" : "Claude"} ${esc(c.launch || "")}, ${ago(c.seen)}</span></span><button class="ns-add" data-newtrack="${esc(c.key)}">등록</button><button class="ghost" data-newignore="${esc(c.key)}">무시</button></div>`;
+  $("newsess").innerHTML = list.length <= 3 ? list.map(row).join("")
+    : list.slice(0, 2).map(row).join("") + `<div class="nsrow"><span class="nst">새 세션이 ${list.length - 2}개 더 있습니다</span><button data-newpanel="1">세션 관리에서 보기</button></div>`;
+}
+$("newsess").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("[data-newtrack],[data-newignore],[data-newpanel]");
+  if (!b) return;
+  if (b.dataset.newtrack) { const r = await post("/api/track", { key: b.dataset.newtrack }); if (r.ok) toast("등록했습니다"); }
+  else if (b.dataset.newignore) { await post("/api/ignore", { key: b.dataset.newignore }); toast("다시 묻지 않습니다"); }
+  else openPanel();
+});
+
 // 에이전트 마지막 응답의 마지막 문단. 결론이 보통 끝에 있어서 끝 문단을 미리보기로 쓴다.
 function lastParagraph(text) {
   const paras = String(text || "").split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
@@ -660,6 +683,7 @@ function render() {
   if (state.root_status && !state.root_status.ok) warns.push(`root 기록을 읽을 수 없음: ${state.root_status.error || ""}`);
   if (state.server_error) warns.push(`서버 오류: ${state.server_error}`);
   $("warns").innerHTML = warns.map((w) => `<span class="warn">${esc(w)}</span>`).join(" ");
+  renderNew();
   const app = state.app || {};
   $("ver").innerHTML = app.current ? `v${esc(app.current)}` : "";
   $("update").innerHTML = app.update
@@ -812,7 +836,21 @@ function notifyChanges(prev, next) {
   }
 }
 
+let seenNew = null;
+function notifyNew(next) {
+  const keys = (next.new_sessions || []).map((c) => c.key);
+  if (seenNew && "Notification" in window && Notification.permission === "granted") {
+    for (const c of next.new_sessions || []) {
+      if (!seenNew.has(c.key)) {
+        try { new Notification("새 세션이 시작되었습니다", { body: `${c.title || displayName(c.workspace)}\n대시보드에서 등록할 수 있습니다`, tag: "new:" + c.key }); } catch (e) {}
+      }
+    }
+  }
+  seenNew = new Set(keys);
+}
+
 function applyState(next) {
+  notifyNew(next);
   if (state) notifyChanges(lastStatus, next);
   lastStatus = Object.fromEntries(next.sessions.map((s) => [s.key, s.status]));
   state = next; lastUpdate = Date.now(); render();

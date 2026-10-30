@@ -35,6 +35,8 @@ STATUS_LABEL = {
     "done": "완료",
     "unreadable": "읽을 수 없음",
 }
+IGNORED_KEEP = 300  # 새 세션 알림에서 무시한 세션을 기억하는 개수
+NEW_SESSION_KEEP_SEC = 24 * 3600  # 이보다 오래된 새 세션 알림은 내린다
 UNTRACKED_KEEP = 50  # 대시보드에서 해제한 세션을 세션 추가 목록 위쪽에 보여주는 개수
 STATUS_ORDER = ["needs_input", "maybe_waiting", "stalled", "running", "idle", "done", "unreadable"]
 
@@ -191,7 +193,7 @@ class Tracked:
     def __init__(self, path: Path = STATE_DIR / "tracked.json"):
         self.path = path
         self.lock = threading.Lock()
-        self.data = {"sessions": [], "dirs": [], "untracked": [], "completed": {}}
+        self.data = {"sessions": [], "dirs": [], "untracked": [], "completed": {}, "ignored": []}
         self.load()
 
     def load(self) -> None:
@@ -200,6 +202,7 @@ class Tracked:
         except (OSError, ValueError):
             self.data = {"sessions": [], "dirs": [], "untracked": [], "completed": {}}
         self.data.setdefault("completed", {})
+        self.data.setdefault("ignored", [])
         self.data.setdefault("sessions", [])
         self.data.setdefault("dirs", [])
         self.data.setdefault("untracked", [])
@@ -218,6 +221,14 @@ class Tracked:
                 if key not in self.data["sessions"]:
                     self.data["sessions"].append(key)
                 self.data["untracked"] = [k for k in self.data["untracked"] if k != key]
+                self.save()
+
+    def ignore(self, key: str) -> None:
+        """새 세션 알림에서 무시한 세션. 다시 묻지 않는다."""
+        with self.lock:
+            self.load()
+            if key not in self.data["ignored"]:
+                self.data["ignored"] = ([key] + self.data["ignored"])[:IGNORED_KEEP]
                 self.save()
 
     def remove(self, key: str) -> None:
@@ -538,6 +549,8 @@ class Registry:
     _proc_at = 0.0
     _show_last_message = True
     _app: dict = {}
+    _known: set | None = None  # 대시보드가 켜졌을 때 이미 있던 세션
+    _new: dict = {}
 
     def __init__(self, tracked: Tracked | None = None, root: bool | None = None):
         if root is None:
@@ -551,6 +564,8 @@ class Registry:
         self.last_refresh = 0.0
         self._codex_index: list[tuple[str, object]] = []
         self._proc_info: dict[str, dict] = {}
+        self._known = None
+        self._new = {}
         self._proc_at = 0.0
 
     def discover(self, days: float = 7) -> list[dict]:
@@ -601,6 +616,7 @@ class Registry:
             changed = False
             cands = self.discover(days=30)
             self._cands = cands
+            self._watch_new(cands)
             want = {c["key"]: c for c in cands if c["tracked"]}
             for key, c in want.items():
                 if key not in self.sessions:
@@ -630,6 +646,37 @@ class Registry:
                 self.version += 1
             self.last_refresh = time.time()
             return changed
+
+    def _watch_new(self, cands: list[dict]) -> None:
+        """대시보드가 켜진 뒤 새로 생긴 세션을 기억한다. 처음 갱신 때 이미 있던 세션은 묻지 않는다."""
+        now = time.time()
+        if self._known is None:
+            self._known = {c["key"] for c in cands}
+            return
+        for c in cands:
+            if c["key"] in self._known:
+                continue
+            self._known.add(c["key"])
+            self._new[c["key"]] = now
+
+    def new_sessions(self) -> list[dict]:
+        """등록하겠냐고 물을 새 세션. 등록했거나 무시했거나, 자동 실행 세션이거나, 하위 세션이면 뺀다."""
+        if load_config().get("ask_new_sessions", True) is False:
+            return []
+        now = time.time()
+        ignored = set(self.tracked.data.get("ignored") or [])
+        parents = getattr(self, "child_parent", {})
+        out = []
+        for c in getattr(self, "_cands", []):
+            seen = self._new.get(c["key"])
+            if not seen or now - seen > NEW_SESSION_KEEP_SEC:
+                continue
+            if c["tracked"] or c["key"] in ignored or c.get("kind") or c["key"] in parents:
+                continue
+            out.append({"key": c["key"], "agent": c["agent"], "title": c.get("title"), "workspace": c.get("workspace"),
+                        "launch": c.get("launch"), "seen": seen})
+        out.sort(key=lambda x: -x["seen"])
+        return out
 
     def _follow_continuations(self, cands: list[dict]) -> None:
         """등록한 세션이 새 ID로 이어졌으면 등록을 새 세션으로 옮긴다. 다음 갱신부터 새 파일을 읽는다."""
@@ -730,6 +777,7 @@ class Registry:
                 "sessions": sessions,
                 "root_status": None if root is None else {"ok": root.ok, "error": root.error},
                 "tracked_dirs": self.tracked.data["dirs"],
+                "new_sessions": self.new_sessions(),
             }
 
     def _last_message(self, status: str, text: str | None, ts, cut: bool) -> dict | None:

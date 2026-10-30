@@ -43,6 +43,9 @@ A personal dashboard that shows the progress of your Claude Code and Codex sessi
   - Launch mode: remote (an app connected over SSH) or cli (started in a terminal on the server)
   - Server IP
   - Terminal multiplexer: tmux, zellij, screen, cmux, herdr
+- **New sessions**
+  - When a new session starts, the web view asks whether to track it ([등록] [무시]), with a browser notification if enabled. The terminal view shows a notice
+  - Automated runs, child sessions and sessions under tracked folders are not asked about. Turn off with `"ask_new_sessions": false`
 - **Views**
   - Sort: recent activity, name, agent, custom order
   - Drag cards to reorder
