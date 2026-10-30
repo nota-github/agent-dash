@@ -15,6 +15,8 @@ import re
 from collections import deque
 
 from agentdash.plan import Plan
+
+LAST_TEXT_MAX = 4000  # 에이전트 마지막 응답을 보관하는 최대 글자 수 (뒤쪽 기준)
 from agentdash.sources import LineReader, LocalFS
 
 USER_INPUT_TOOLS = {"AskUserQuestion", "ExitPlanMode"}
@@ -73,6 +75,10 @@ class Transcript:
         self.error_streak: tuple[str, int] = ("", 0)
         self.plan = Plan()
         self.last_turn_ts: str | None = None
+        self.last_text: str | None = None
+        self.last_text_id = None
+        self.last_text_ts: str | None = None
+        self.last_text_cut = False
         self.agent_calls: dict[str, dict] = {}  # tool_use id -> 호출 정보
         self.tool_count = 0
         self.tool_times: deque = deque(maxlen=3000)  # 도구 호출 시각 (활동량 계산용, 내용은 저장하지 않는다)
@@ -141,6 +147,20 @@ class Transcript:
             for b in content if isinstance(content, list) else []:
                 if isinstance(b, dict) and b.get("type") == "tool_use":
                     self._tool_use(b, ts)
+            # 에이전트가 쓴 마지막 응답 글. 사용자 입력이 아니다. 끝부분(결론)을 남기려고 뒤쪽만 보관한다.
+            texts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"] if isinstance(content, list) else []
+            text = "\n\n".join(x for x in texts if x.strip())
+            if text and not r.get("isSidechain", False) or (text and self.meta.get("agentId")):
+                if mid and mid == self.last_text_id:
+                    self.last_text = (self.last_text or "") + "\n\n" + text
+                else:
+                    self.last_text = text
+                self.last_text_id, self.last_text_ts = mid, ts
+                if len(self.last_text) > LAST_TEXT_MAX:
+                    self.last_text = self.last_text[-LAST_TEXT_MAX:]
+                    self.last_text_cut = True
+                else:
+                    self.last_text_cut = False
         else:
             if isinstance(content, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
                 self.last_kind = "tool_result"

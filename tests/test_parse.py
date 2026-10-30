@@ -378,6 +378,24 @@ class ContinuationTest(unittest.TestCase):
             self.assertIn("claude:new", d["completed"])
 
 
+class LastMessageTest(unittest.TestCase):
+    def test_last_agent_text_is_kept_and_user_text_is_not(self):
+        with tempfile.TemporaryDirectory() as t:
+            p = Path(t) / "s1.jsonl"
+            write_jsonl(p, [
+                user(iso(60), "비밀 요청 내용"),
+                assistant(iso(50), "m1", [{"type": "text", "text": "중간 답"}]),
+                assistant(iso(40), "m2", [{"type": "text", "text": "첫 문단"}]),
+                assistant(iso(39), "m2", [{"type": "text", "text": "## 결과\n- 끝났습니다"}], stop="end_turn"),
+            ])
+            s = ClaudeSession(LocalFS(), str(p))
+            s.poll()
+            self.assertEqual(s.main.last_text, "첫 문단\n\n## 결과\n- 끝났습니다")
+            self.assertNotIn("비밀", s.main.last_text)
+            from agentdash import tui
+            self.assertEqual(tui.last_paragraph(s.main.last_text), "끝났습니다")
+
+
 class LaunchTest(unittest.TestCase):
     def test_launch_is_remote_or_cli(self):
         L = model.launch_of

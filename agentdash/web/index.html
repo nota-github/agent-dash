@@ -111,7 +111,8 @@ header .right { display: flex; justify-content: flex-end; align-items: center; g
 .bhead .names { flex: 1; min-width: 0; }
 .ws { font-weight: 700; font-size: 15.5px; display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ws span.n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.title { color: var(--text-2); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title { color: var(--text-3); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title svg { width: 13px; height: 13px; vertical-align: -2px; }
 .statline { font-size: 12.5px; color: var(--text-2); margin-top: 2px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .eta { font-weight: 650; color: var(--text); }
 .agent { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 650; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
@@ -222,16 +223,17 @@ header .right { display: flex; justify-content: flex-end; align-items: center; g
 .more { font-size: 12.5px; display: inline-flex; gap: 4px; align-items: center; }
 .open-details .more svg { transform: rotate(180deg); }
 
-.panel-wrap { position: fixed; inset: 0; background: rgba(31,36,48,.25); display: none; justify-content: flex-end; z-index: 10; }
+.panel-wrap { position: fixed; inset: 0; background: rgba(226,230,238,.45); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); display: none; justify-content: flex-end; z-index: 10; }
 .panel-wrap.open { display: flex; }
-.panel { width: min(560px, 100%); height: 100%; background: #fff; padding: 18px; overflow-y: auto; box-shadow: -8px 0 24px rgba(31,36,48,.12); }
+.panel { width: min(560px, 100%); height: 100%; background: rgba(246,247,251,.88); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-left: 1px solid rgba(255,255,255,.9); padding: 18px; overflow-y: auto; box-shadow: -8px 0 28px rgba(31,36,48,.10); color: var(--text); }
+.panel .cand button:not(.on) { background: rgba(255,255,255,.85); }
 .panel h2 { font-size: 16px; margin: 0; flex: 1; }
 .panel .hint { color: var(--text-2); font-size: 12.5px; margin: 6px 0 12px; }
 .panel details.auto { margin-top: 14px; }
 .panel details.auto summary { font-size: 12px; font-weight: 700; color: var(--text-3); cursor: pointer; }
 .panel .grp { font-size: 12px; font-weight: 700; color: var(--text-3); margin: 14px 0 2px; }
 .cand.recent { background: var(--amber-bg); border-radius: 10px; padding: 8px 10px; border-bottom: 0; margin-bottom: 4px; }
-.modal-wrap { position: fixed; inset: 0; background: rgba(31,36,48,.28); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
+.modal-wrap { position: fixed; inset: 0; background: rgba(226,230,238,.5); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
 .modal-wrap.open { display: flex; }
 .modal { background: #fff; border-radius: 16px; padding: 20px 22px 16px; width: min(380px, 100%); box-shadow: 0 12px 40px rgba(31,36,48,.2); }
 .modal .mt { font-size: 15px; font-weight: 700; }
@@ -249,6 +251,17 @@ button.settings:hover { background: linear-gradient(135deg, #5d47c8, #2f68d6); }
 [data-tip]::after { content: attr(data-tip); position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%); width: max-content; max-width: 240px; background: var(--text); color: #fff; font-size: 12px; font-weight: 500; line-height: 1.45; padding: 6px 10px; border-radius: 8px; box-shadow: 0 4px 14px rgba(31,36,48,.2); opacity: 0; pointer-events: none; transition: opacity .15s; white-space: normal; }
 [data-tip]:hover::after, [data-tip]:focus-visible::after { opacity: 1; }
 @media (max-width: 720px) { [data-tip]::after { right: auto; left: 0; top: calc(100% + 6px); transform: none; } }
+.lastmsg { background: rgba(255,255,255,.8); border: 1px solid var(--line); border-left: 3px solid var(--teal); border-radius: 10px; padding: 7px 10px; cursor: pointer; }
+.lastmsg:hover { border-color: var(--line-2); border-left-color: var(--teal); }
+.lm-h { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 650; color: var(--teal-tx); }
+.lm-h .lm-t { color: var(--text-3); font-weight: 500; }
+.lm-h .lm-open { margin-left: auto; font-size: 11.5px; padding: 1px 8px; color: var(--text-2); }
+.lm-b { font-size: 12.5px; color: var(--text); margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.5; }
+.modal.msg { width: min(760px, 100%); padding: 18px 20px; display: flex; flex-direction: column; max-height: 80vh; }
+.msg-h { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 10px; }
+.msg-h > div { flex: 1; min-width: 0; }
+.msg-h .mn { margin: 2px 0 0; }
+.msg-b { flex: 1; overflow-y: auto; max-height: 70vh; white-space: pre-wrap; word-break: break-word; font-size: 13.5px; line-height: 1.6; color: var(--text); background: #f7f8fb; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
 button.primary { background: var(--text); border-color: var(--text); color: #fff; }
 button.primary:hover { background: #343b4a; }
 .cand { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
@@ -312,6 +325,13 @@ button.primary:hover { background: #343b4a; }
     <div id="cand-list" style="margin-top:12px"></div>
   </div>
 </div>
+<div class="modal-wrap" id="msg-modal">
+  <div class="modal msg" role="dialog" aria-modal="true">
+    <div class="msg-h"><div><div class="mt" id="msg-name"></div><div class="mn" id="msg-meta"></div></div>
+      <button class="icon" id="msg-copy" title="복사"></button><button class="icon" id="msg-close" title="닫기"></button></div>
+    <div class="msg-b" id="msg-body"></div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -324,6 +344,8 @@ const ICON = {
   chev: '<path d="M6 9l6 6 6-6"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
   flag: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
+  msg: '<path d="M4 5h16v11H9l-5 4z"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   layers: '<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>',
   term: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/>',
@@ -404,6 +426,24 @@ function statusRing(status) {
     : `<circle cx="32" cy="32" r="${r}" fill="none" stroke="${color}" stroke-width="7" opacity=".9"/><g stroke="${color}">${GLYPH[status] || ""}</g>`;
   return `<svg class="ring" width="64" height="64" viewBox="0 0 64 64"><title>${label}</title><circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--track)" stroke-width="7"/>${body}</svg>`;
 }
+// 에이전트 마지막 응답의 마지막 문단. 결론이 보통 끝에 있어서 끝 문단을 미리보기로 쓴다.
+function lastParagraph(text) {
+  const paras = String(text || "").split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
+  // 제목 줄(#)은 본문이 있으면 뺀다
+  let lines = (paras.length ? paras[paras.length - 1] : "").split("\n");
+  if (lines.some((l) => !/^\s*#/.test(l))) lines = lines.filter((l) => !/^\s*#/.test(l));
+  return lines.join(" ").replace(/(^|\s)[#>*-]+\s+/g, "$1").replace(/\s+/g, " ").trim();
+}
+let msgStore = {};
+function lastMsg(s) {
+  const m = s.last_message;
+  if (!m || !m.text) return "";
+  msgStore[s.key] = { name: s.title || displayName(s.workspace), title: displayName(s.workspace), ...m };
+  return `<div class="lastmsg" data-msg="${esc(s.key)}" title="눌러서 전체 보기">
+    <div class="lm-h"><span>${icon("msg")} 에이전트 마지막 응답</span><span class="lm-t">${hhmm(m.ts)}</span><button class="ghost lm-open" data-msg="${esc(s.key)}">전체 보기</button></div>
+    <div class="lm-b">${esc(lastParagraph(m.text))}</div></div>`;
+}
+
 // 진행률 한 줄: 막대, 퍼센트, 완료 단계 수, 남은 시간. 계획이 없으면 그 사실만 적는다.
 function progLine(s, main) {
   if (s.status === "done" && s.completed_at) return `<div class="prog done">${icon("check")} ${fmtDate(s.completed_at)}에 완료로 표시함</div>`;
@@ -498,20 +538,21 @@ function boardHtml(s) {
   const t = s.tokens || {};
   return `<section class="board st-${s.status} ${(s.alerts || []).some((a) => a.kind === "error") ? "alert" : ""} ${open ? "open-details" : ""}" data-key="${esc(s.key)}">
     <div class="btab ${s.agent}">${icon(s.agent === "codex" ? "term" : "spark")}${s.agent === "codex" ? "Codex" : "Claude"}${launchLabel(s) ? `<span class="ent">${esc(launchLabel(s))}</span>` : ""}</div>
-    <button class="bx" data-untrack="${esc(s.key)}" data-name="${esc(displayName(s.workspace))}" title="트래킹 해제">${icon("x")}</button>
+    <button class="bx" data-untrack="${esc(s.key)}" data-name="${esc((s.title || "") + "  (" + displayName(s.workspace) + ")")}" title="트래킹 해제">${icon("x")}</button>
     <div class="bleft">
     ${hostLine()}
     <div class="bhead">
       ${statusRing(s.status)}
       <div class="names">
         <div class="dates">세션 시작 : ${fmtDate(s.started)}<br>마지막 실행 : ${fmtDate(s.last_activity)}</div>
-        <div class="ws">${light(s.status, s.status_label)}<span class="n" title="${esc(s.workspace)}">${esc(displayName(s.workspace))}</span></div>
-        <div class="title">${esc(s.title)}</div>
+        <div class="ws">${light(s.status, s.status_label)}<span class="n" title="${esc(s.title || "")}">${esc(s.title && s.title !== "제목 없음" ? s.title : displayName(s.workspace))}</span></div>
+        <div class="title" title="${esc(s.cwd || s.workspace)}">${icon("folder")} ${esc(displayName(s.workspace))}</div>
         ${progLine(s, main)}
         <div class="statline">${s.user === "root" ? `<span class="pill">root</span>` : ""}${muxBadge(s.process)}<span>${esc(s.status_label)}</span></div>
       </div>
     </div>
     ${alerts ? `<div>${alerts}</div>` : ""}
+    ${lastMsg(s)}
     <div class="stats"><span>${icon("clock")} ${statTime}</span><span title="토큰 (캐시 읽기 제외)">${icon("coins")} ${fmtTok(t.io ?? t.total)}</span>${nKids ? `<span>${icon("layers")} 서브 ${nDone}/${nKids}</span>` : ""}</div>
     </div>
     <div class="card">
@@ -557,7 +598,7 @@ function sorted(list) {
 function sortedBy(list) {
   const recent = (a, b) => (b.last_activity || 0) - (a.last_activity || 0);
   if (sortMode === "agent") return [...list].sort((a, b) => (a.agent === "codex") - (b.agent === "codex") || recent(a, b));
-  if (sortMode === "name") return [...list].sort((a, b) => displayName(a.workspace).localeCompare(displayName(b.workspace), "ko") || String(a.title).localeCompare(String(b.title), "ko") || recent(a, b));
+  if (sortMode === "name") return [...list].sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "ko") || displayName(a.workspace).localeCompare(displayName(b.workspace), "ko") || recent(a, b));
   if (sortMode === "custom") {
     // 직접 배치한 순서를 따른다. 순서에 없는 새 세션은 맨 앞에 최근 순으로 둔다.
     const idx = Object.fromEntries(order.map((k, i) => [k, i]));
@@ -604,7 +645,7 @@ function render() {
 }
 
 $("boards").addEventListener("click", async (ev) => {
-  const t = ev.target.closest("[data-copy],[data-more],[data-untrack],[data-kid],[data-complete]");
+  const t = ev.target.closest("[data-copy],[data-more],[data-untrack],[data-kid],[data-complete],[data-msg]");
   if (!t) return;
   if (t.dataset.copy !== undefined) {
     ev.stopPropagation();
@@ -613,6 +654,9 @@ $("boards").addEventListener("click", async (ev) => {
   } else if (t.dataset.more !== undefined) {
     const k = t.dataset.more; openBoards.has(k) ? openBoards.delete(k) : openBoards.add(k);
     store.set("openBoards", [...openBoards]); render();
+  } else if (t.dataset.msg !== undefined) {
+    ev.stopPropagation();
+    openMsg(t.dataset.msg);
   } else if (t.dataset.complete !== undefined) {
     ev.stopPropagation();
     const r = await post("/api/complete", { key: t.dataset.complete, done: t.dataset.done === "1" });
@@ -625,6 +669,30 @@ $("boards").addEventListener("click", async (ev) => {
     const k = t.dataset.kid; openKids.has(k) ? openKids.delete(k) : openKids.add(k); render();
   }
 });
+
+// 마지막 응답 전체 보기 팝업. 줄바꿈을 살리고, 길면 팝업 안에서 스크롤한다.
+let msgKey = null;
+function openMsg(key) {
+  const m = msgStore[key];
+  if (!m) return;
+  msgKey = key;
+  $("msg-name").textContent = `${m.name}  ${m.title || ""}`;
+  $("msg-meta").textContent = `에이전트 마지막 응답, ${fmtDate(m.ts)}${m.truncated ? ", 길어서 앞부분은 생략함" : ""}`;
+  $("msg-body").textContent = (m.truncated ? "(앞부분 생략)\n\n" : "") + m.text;
+  $("msg-modal").classList.add("open");
+  $("msg-body").scrollTop = $("msg-body").scrollHeight;
+}
+function closeMsg() { msgKey = null; $("msg-modal").classList.remove("open"); }
+$("msg-close").innerHTML = icon("x");
+$("msg-copy").innerHTML = icon("copy");
+$("msg-close").onclick = closeMsg;
+$("msg-modal").addEventListener("click", (ev) => { if (ev.target === $("msg-modal")) closeMsg(); });
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && msgKey) closeMsg(); });
+$("msg-copy").onclick = async () => {
+  const m = msgStore[msgKey];
+  if (!m) return;
+  try { await navigator.clipboard.writeText(m.text); toast("응답을 복사했습니다"); } catch (e) { toast("복사하지 못했습니다"); }
+};
 
 let modalKey = null;
 function askUntrack(key, name) {
@@ -646,7 +714,7 @@ const boardsEl = $("boards");
 boardsEl.addEventListener("mousedown", (ev) => {
   const b = ev.target.closest(".board");
   if (!b) return;
-  b.draggable = !ev.target.closest(".details,.kid,button,code,a,input");
+  b.draggable = !ev.target.closest(".details,.kid,.lastmsg,button,code,a,input");
 });
 boardsEl.addEventListener("dragstart", (ev) => {
   const b = ev.target.closest(".board"); if (!b) return;

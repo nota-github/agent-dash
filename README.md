@@ -33,6 +33,7 @@ A personal dashboard that shows the progress of your Claude Code and Codex sessi
 - **Status**
   - Running, waiting for user, user's turn to reply or approve, stalled, running in background
   - Cards waiting for your reply get a slowly moving background
+  - When it is your turn, the card shows the last paragraph of the agent's last reply. Click it (web) or press `m` (terminal) for the full text
   - The circle on a card shows status only; progress is a separate bar with percent, steps done and time left
   - The step in progress fills by activity (time and tool calls compared with finished steps), capped at 90%
   - Sessions without plan steps show activity instead of a percent: turn time, tool calls, calls in the last 10 minutes
@@ -54,7 +55,9 @@ A personal dashboard that shows the progress of your Claude Code and Codex sessi
 - No hooks, plugins or skills installed. No extra tokens used
 - Reads only the sessions you track
 - Never collects, stores or shows what you type (requests, answers, rejection reasons)
-- Shows only the titles and summaries that Claude or Codex generated
+- Shows only text written by Claude or Codex: titles, summaries, and the agent's last reply when it is your turn
+  - An agent reply can quote what you asked. To hide last replies, add `"show_last_message": false` to `~/.agentdash/config.json`
+  - Nothing is copied to other files; it is read from the session logs when shown
 - The web server listens on `127.0.0.1` only
 
 ## Install

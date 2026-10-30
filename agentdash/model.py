@@ -444,6 +444,7 @@ def resume_command(agent: str, source: str, sid: str, cwd: str | None, entry: st
 class Registry:
     _proc_info: dict = {}  # 테스트처럼 __init__ 없이 만든 경우의 기본값. 값은 통째로 바꾸기만 한다.
     _proc_at = 0.0
+    _show_last_message = True
 
     def __init__(self, tracked: Tracked | None = None, root: bool | None = None):
         if root is None:
@@ -604,6 +605,7 @@ class Registry:
                 if key in child_parent:
                     children.setdefault(child_parent[key], []).append((key, s))
             self._scan_processes(now)
+            self._show_last_message = load_config().get("show_last_message", True) is not False
             for key, s in self.sessions.items():
                 if key in child_parent:
                     continue
@@ -631,6 +633,12 @@ class Registry:
                 "root_status": None if root is None else {"ok": root.ok, "error": root.error},
                 "tracked_dirs": self.tracked.data["dirs"],
             }
+
+    def _last_message(self, status: str, text: str | None, ts, cut: bool) -> dict | None:
+        """입력 차례일 때 에이전트가 쓴 마지막 응답. 사용자 입력은 넣지 않는다. 설정 show_last_message로 끈다."""
+        if not text or status not in ("idle", "done") or not self._show_last_message:
+            return None
+        return {"text": text, "ts": parse_ts(ts), "truncated": cut}
 
     def _apply_completed(self, sessions: list[dict]) -> None:
         """사용자가 완료로 표시한 세션은 상태를 완료로 바꾼다. 표시 뒤 새 활동이 있으면 다시 연다."""
@@ -801,6 +809,7 @@ class Registry:
             "model": s.main.model, "process": self._proc_info.get(key),
             "session_steps": list(s.main.plan.session_counts()),
             "activity": activity(s.main.tool_times, s.main.last_turn_ts, now),
+            "last_message": self._last_message(status, s.main.last_text, s.main.last_text_ts, s.main.last_text_cut),
         }
 
     def _codex_view(self, key, s: CodexSession, now, today) -> dict:
@@ -839,6 +848,7 @@ class Registry:
             "model": s.model, "process": self._proc_info.get(key),
             "session_steps": list(s.plan.session_counts()),
             "activity": activity(s.tool_times, s.turn_started, now),
+            "last_message": self._last_message(status, s.last_message, s.last_ts, False),
         }
 
 

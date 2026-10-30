@@ -30,7 +30,7 @@ LAYOUTS = [("grid", "세로형"), ("list", "가로형")]
 FILTERS = [("all", "전체"), ("wait", "대기"), ("running", "실행 중"), ("idle", "입력 차례"), ("done", "완료")]
 SPIN = "◐◓◑◒"
 # 화면 아래 키 막대. 자주 쓰는 순서로 둔다.
-KEY_BAR = [("a", "세션 관리"), ("x", "해제"), ("d", "완료 표시"), ("Enter", "펼치기"), ("c", "재개 명령 복사"), ("r", "새로고침"),
+KEY_BAR = [("a", "세션 관리"), ("x", "해제"), ("d", "완료 표시"), ("m", "마지막 응답"), ("Enter", "펼치기"), ("c", "재개 명령 복사"), ("r", "새로고침"),
            ("s", "정렬"), ("[ ]", "옮기기"), ("v", "세로/가로"), ("f", "상태 필터"), ("g", "Claude/Codex"),
            ("←↑→↓", "이동"), ("?", "도움말"), ("q", "종료")]
 # ? 도움말 창
@@ -41,6 +41,7 @@ HELP = [
     ("x", "선택한 세션 트래킹 해제 (확인 창에서 y 확인, n 취소)"),
     ("d", "선택한 세션을 완료로 표시, 다시 누르면 다시 열기 (새 활동이 생기면 자동으로 다시 열림)"),
     ("c", "선택한 세션의 이어서 작업하기 명령 복사"),
+    ("m", "입력 차례인 세션의 에이전트 마지막 응답 전체 보기 (↑↓ 스크롤, 아무 키나 닫기)"),
     ("r", "지금 바로 다시 읽기 (평소에는 2초마다 자동으로 갱신)"),
     ("s", "정렬 바꾸기: 최근 실행순, 이름순, 에이전트별, 직접 배치"),
     ("[ ]", "선택한 카드를 앞, 뒤로 옮기기 (직접 배치로 바뀜)"),
@@ -110,6 +111,38 @@ def fmt_date(ts) -> str:
 def display_name(ws: str) -> str:
     import re
     return re.sub(r"^\d{6}[-_]", "", ws or "") or ws or ""
+
+
+def last_paragraph(text: str) -> str:
+    import re
+    paras = [p.strip() for p in re.split(r"\n\s*\n", text or "") if p.strip()]
+    lines = (paras[-1] if paras else "").split("\n")
+    if any(not re.match(r"\s*#", ln) for ln in lines):  # 제목 줄(#)은 본문이 있으면 뺀다
+        lines = [ln for ln in lines if not re.match(r"\s*#", ln)]
+    p = re.sub(r"^\s*[#>*\-]+\s+", "", "\n".join(lines), flags=re.M)
+    return re.sub(r"\s+", " ", p).strip()
+
+
+def split_width(text: str, w: int) -> tuple[str, str]:
+    """표시 폭 w까지의 앞부분과 나머지."""
+    out, n = [], 0
+    for i, c in enumerate(text):
+        if n + cw(c) > w:
+            return "".join(out), text[i:]
+        out.append(c)
+        n += cw(c)
+    return "".join(out), ""
+
+
+def wrap_lines(text: str, w: int) -> list[str]:
+    lines = []
+    for raw in (text or "").split("\n"):
+        while True:
+            head, raw = split_width(raw, w)
+            lines.append(head)
+            if not raw:
+                break
+    return lines
 
 
 # ---------- 색 ----------
@@ -243,6 +276,16 @@ def left_lines(s: dict, w: int, tick: int, host: dict | None = None) -> list:
         [(sym + " ", sattr), (cut(display_name(s.get("workspace")), w - 2), curses.A_BOLD)],
     ]
     st = [(cut(s.get("status_label") or "", w), col(STATUS_COLOR.get(s["status"], "gray")) | curses.A_BOLD)]
+    lm = s.get("last_message")
+    if lm and lm.get("text"):
+        # 에이전트 마지막 응답의 마지막 문단을 두 줄까지. 전체는 m 키
+        para = last_paragraph(lm["text"])
+        first, rest = split_width(para, w - 2)
+        out_msg = [[("▌", col("teal")), (" " + first, 0)]]
+        if rest:
+            out_msg.append([("▌", col("teal")), (" " + cut(rest, w - 2), 0)])
+    else:
+        out_msg = []
     out.append(st)
     extra = []
     if s.get("eta"):
@@ -255,6 +298,7 @@ def left_lines(s: dict, w: int, tick: int, host: dict | None = None) -> list:
         extra.append(mt)
     if extra:
         out.append([(cut("  ".join(extra), w), col("violet"))])
+    out += out_msg
     t = s.get("tokens") or {}
     nodes = s.get("nodes") or []
     kids = [n for n in nodes if n["id"] != "main"]
@@ -446,7 +490,7 @@ class App:
             items = [s for s in items if s["status"] == "done"]
         recent = lambda s: -(s.get("last_activity") or 0)  # noqa: E731
         if self.sort == "name":
-            items.sort(key=lambda s: (display_name(s.get("workspace")).lower(), s.get("title") or "", recent(s)))
+            items.sort(key=lambda s: ((s.get("title") or "").lower(), display_name(s.get("workspace")).lower(), recent(s)))
         elif self.sort == "agent":
             items.sort(key=lambda s: (s.get("agent") == "codex", recent(s)))
         elif self.sort == "custom":
@@ -611,6 +655,45 @@ class App:
         if line:
             lines.append(line)
         return lines[:3]
+
+    def msg_window(self, s: dict) -> None:
+        """에이전트 마지막 응답 전체. ↑↓ PgUp PgDn으로 스크롤, 그 밖의 키로 닫는다."""
+        m = s.get("last_message") or {}
+        if not m.get("text"):
+            self.flash("입력 차례인 세션에만 마지막 응답이 있습니다")
+            return
+        H, W = self.scr.getmaxyx()
+        w, h = min(W - 2, 110), H - 2
+        body = wrap_lines(("(앞부분 생략)\n\n" if m.get("truncated") else "") + m["text"], w - 6)
+        top = max(0, len(body) - (h - 5))  # 결론이 보이도록 끝에서 시작한다
+        self.scr.timeout(-1)
+        try:
+            while True:
+                win = curses.newwin(h, w, 1, max(0, (W - w) // 2))
+                win.bkgd(" ", col("modal"))
+                win.box()
+                head = f"{display_name(s.get('workspace'))}  에이전트 마지막 응답  {fmt_date(m.get('ts'))}"
+                try:
+                    win.addstr(1, 3, cut(head, w - 6), col("modal") | curses.A_BOLD)
+                    for i, line in enumerate(body[top:top + h - 5]):
+                        win.addstr(3 + i, 3, line, col("modal"))
+                    win.addstr(h - 2, 3, cut("↑↓ PgUp PgDn 스크롤, 아무 키나 닫기", w - 6), col("modal") | curses.A_DIM)
+                except curses.error:
+                    pass
+                win.refresh()
+                k = self.scr.getch()
+                if k in (curses.KEY_UP, ord("k")):
+                    top = max(0, top - 1)
+                elif k in (curses.KEY_DOWN, ord("j")):
+                    top = min(max(0, len(body) - (h - 5)), top + 1)
+                elif k == curses.KEY_PPAGE:
+                    top = max(0, top - (h - 6))
+                elif k == curses.KEY_NPAGE:
+                    top = min(max(0, len(body) - (h - 5)), top + (h - 6))
+                else:
+                    return
+        finally:
+            self.scr.timeout(500)
 
     def help_window(self) -> None:
         H, W = self.scr.getmaxyx()
@@ -795,6 +878,8 @@ class App:
             self.flash("다시 읽는 중", 2)
         elif k == ord("?"):
             self.help_window()
+        elif k == ord("m") and cur:
+            self.msg_window(cur)
         elif k in (curses.KEY_RIGHT, ord("l")):
             self.sel = min(len(items) - 1, self.sel + 1) if items else 0
         elif k in (curses.KEY_LEFT, ord("h")):
