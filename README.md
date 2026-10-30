@@ -1,110 +1,146 @@
 # agent-dash
 
-Claude Code와 Codex로 여러 작업을 동시에 돌릴 때, 세션마다 메인 에이전트와 서브에이전트의 진행 상황을 한 화면에서 보여주는 개인용 대시보드입니다. 웹 화면과 터미널 화면(TUI)을 제공합니다.
+Claude Code, Codex 세션의 진행 상황을 한 화면에서 보는 개인용 대시보드
 
-- 세션별 카드: 진행률, 예상 남은 시간, 계획 단계, 메인 에이전트와 서브에이전트, 하위 세션(`claude -p`, `codex exec`)
-- 상태: 실행 중, 사용자 대기, 사용자 입력(승인) 차례, 정체, 백그라운드 실행
-- 세션을 실행 중인 서버 IP와 멀티플렉서(tmux, zellij, screen, cmux, herdr) 표시
-- 토큰 사용량, 컨텍스트 사용률, 다음 날 이어서 작업할 재개 명령
-- 정렬(최근 실행순, 이름순, 에이전트별, 직접 배치), 끌어서 위치 바꾸기, 세로형과 가로형 보기
+- 웹 화면과 터미널 화면(TUI) 제공
+- 여러 작업을 동시에 실행할 때 세션별 진행 상황 확인용
+
+## 화면
+
+> 화면의 세션, 경로, 서버 주소는 모두 예시 값
+
+**웹 화면, 세로형**
 
 ![웹 화면, 세로형](docs/images/web-grid.png)
 
-<details>
-<summary>가로형 보기, 터미널 화면(TUI)</summary>
+**웹 화면, 가로형**
 
 ![웹 화면, 가로형](docs/images/web-list.png)
 
+**터미널 화면(TUI)**
+
 ![터미널 화면](docs/images/tui.png)
 
-</details>
+## 주요 기능
 
-화면의 세션, 경로, 서버 주소는 모두 예시 값입니다.
+- **세션 카드**
+  - 진행률, 예상 남은 시간, 계획 단계
+  - 메인 에이전트, 서브 에이전트, 하위 세션(`claude -p`, `codex exec`)
+  - 토큰 사용량, 컨텍스트 사용률
+  - 다음 날 이어서 작업할 재개 명령
+- **상태 표시**
+  - 실행 중, 사용자 대기, 입력(승인) 차례, 정체, 백그라운드 실행
+  - 입력 차례인 카드는 바탕 움직임으로 강조
+- **실행 환경 표시**
+  - 실행 방식: remote(앱이 SSH로 연결), cli(서버 터미널에서 실행)
+  - 실행 서버 IP
+  - 멀티플렉서: tmux, zellij, screen, cmux, herdr
+- **보기**
+  - 정렬: 최근 실행순, 이름순, 에이전트별, 직접 배치
+  - 카드 끌어서 옮기기
+  - Claude, Codex 필터
+  - 세로형, 가로형
 
-Claude와 Codex가 원래 남기는 기록 파일을 읽기만 합니다. 훅, 플러그인, 스킬을 설치하지 않고, 추가 토큰도 쓰지 않습니다. 사용자가 입력한 내용(요청, 답변, 거부 사유)은 수집하지도, 저장하지도, 표시하지도 않습니다. 화면에는 Claude나 Codex가 만든 제목과 요약만 나옵니다.
+## 수집 원칙
+
+- Claude, Codex가 남기는 기록 파일을 읽기만 함
+- 훅, 플러그인, 스킬 설치 없음. 추가 토큰 사용 없음
+- 등록한 세션만 읽음
+- 사용자 입력(요청, 답변, 거부 사유)은 수집, 저장, 표시하지 않음
+- 화면에는 Claude, Codex가 만든 제목과 요약만 표시
+- 웹 서버는 `127.0.0.1`에만 열림
 
 ## 설치
-
-에이전트를 실행하는 서버에서 아래 한 줄을 실행합니다. Python 3.9 이상이 필요하고, 다른 패키지는 필요 없습니다.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/nota-github/agent-dash/main/install.sh | sh
 ```
 
-설치 중에 묻는 것:
+- 에이전트를 실행하는 서버에서 실행
+- 필요 조건: Python 3.9 이상 (다른 패키지 불필요)
+- 설치 중 선택
+  - 화면: 웹, 터미널(TUI), 둘 다
+  - 웹 포트: 24000~25000에서 빈 포트 자동 선택. 없으면 직접 입력
+- 설치 위치
+  - 코드: `~/.local/share/agent-dash`
+  - 실행 파일: `~/.local/bin/agent-dash`
+  - 설정, 등록 목록: `~/.agentdash`
+- 셸 설정 파일은 바꾸지 않음. `~/.local/bin`이 PATH에 없으면 추가 방법 안내
+- 질문 없이 설치
 
-1. 설치할 화면: 웹, 터미널(TUI), 둘 다
-2. 웹 포트: 24000~25000 대역에서 비어 있는 포트를 자동으로 고릅니다. 비어 있는 포트가 없으면 직접 입력합니다.
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/nota-github/agent-dash/main/install.sh | AGENT_DASH_MODE=both AGENT_DASH_PORT=24500 sh
+  ```
 
-설치 위치는 `~/.local/share/agent-dash`(코드), `~/.local/bin/agent-dash`(실행 파일), `~/.agentdash`(설정, 등록 목록)입니다. 셸 설정 파일은 바꾸지 않습니다. `~/.local/bin`이 PATH에 없으면 설치를 마칠 때 추가 방법을 안내합니다.
-
-질문 없이 설치하려면 환경 변수를 줍니다.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/nota-github/agent-dash/main/install.sh | AGENT_DASH_MODE=both AGENT_DASH_PORT=24500 sh
-```
-
-## 사용 방식
+## 지원 사용 방식
 
 | 방식 | 지원 | 설치 위치와 접속 |
 |---|---|---|
-| 1. 로컬 PC에서 Claude, Codex 앱을 직접 실행 | 다음 버전 (Mac) | |
+| 1. 로컬 PC에서 Claude, Codex 앱 직접 실행 | 다음 버전 (Mac) | |
 | 2. 로컬 앱을 원격 서버에 SSH로 연결해 실행 | 지원 | 원격 서버에 설치. 웹은 SSH 터널로 접속 |
-| 3. 원격 서버에 SSH로 접속해 CLI로 실행 | 지원 | 원격 서버에 설치. 웹은 SSH 터널, TUI는 그 SSH 터미널에서 |
+| 3. 원격 서버에 SSH로 접속해 CLI로 실행 | 지원 | 원격 서버에 설치. 웹은 SSH 터널, TUI는 SSH 터미널에서 |
 
 ## 세션 등록
 
-설치 직후에는 화면에 아무 세션도 나오지 않습니다. 볼 세션을 직접 등록해야 하고, 등록한 세션만 읽습니다. 셋 중 편한 방법을 씁니다.
+- 설치 직후에는 표시되는 세션 없음
+- 볼 세션을 직접 등록해야 하며, 등록한 세션만 읽음
 
 | 방법 | 등록 | 해제 |
 |---|---|---|
-| 웹 화면 | 오른쪽 위 "설정 > 세션 관리"에서 세션 옆 "등록" | 카드 오른쪽 위 x, 또는 세션 관리의 "등록됨" |
-| 터미널 화면 | `a`(세션 관리)에서 세션을 고르고 `Enter` | 카드를 고르고 `x`, 또는 세션 관리에서 `Enter` |
+| 웹 화면 | 오른쪽 위 "설정 > 세션 관리"에서 "등록" | 카드 오른쪽 위 x, 또는 세션 관리의 "등록됨" |
+| 터미널 화면 | `a`(세션 관리)에서 세션 선택 후 `Enter` | 카드 선택 후 `x`, 또는 세션 관리에서 `Enter` |
 | 명령 | `agent-dash track <세션 ID 앞부분>` | `agent-dash untrack <세션 ID 앞부분>` |
 
 ```bash
 agent-dash sessions                 # 최근 세션 목록과 ID (* 등록됨)
 agent-dash track 3b71ac63           # 세션 ID 앞부분으로 등록
-agent-dash track --dir ~/work/api   # 이 폴더 아래에서 실행하는 세션을 앞으로 생기는 것까지 모두 등록
+agent-dash track --dir ~/work/api   # 이 폴더 아래 세션을 앞으로 생기는 것까지 모두 등록
 ```
 
-- 등록한 세션이 실행한 서브 에이전트와 `claude -p`, `codex exec` 같은 하위 세션은 따로 등록하지 않아도 그 카드 안에 들어갑니다.
-- 해제한 세션은 세션 관리 목록 맨 위 "최근 해제한 세션"에 남아 있어 다시 등록할 수 있습니다.
-- 등록 목록은 웹 화면과 터미널 화면이 함께 씁니다.
+- 서브 에이전트와 하위 세션(`claude -p`, `codex exec`)은 따로 등록하지 않아도 부모 카드 안에 표시
+- 해제한 세션은 세션 관리 목록 맨 위 "최근 해제한 세션"에서 다시 등록 가능
+- 등록 목록은 웹 화면과 터미널 화면이 함께 사용
 
 ## 사용법
 
 ```bash
-agent-dash start                    # 웹 서버 켜기 (백그라운드)
-agent-dash stop                     # 웹 서버 끄기
-agent-dash restart                  # 웹 서버 다시 켜기
-agent-dash status                   # 설치 정보, 웹 서버 상태, 포트, 등록 세션 수
-agent-dash tui                      # 터미널 화면 (q로 종료)
-
-agent-dash update                   # 최신 버전으로 업데이트
-agent-dash uninstall                # 삭제
+agent-dash start      # 웹 서버 켜기 (백그라운드)
+agent-dash stop       # 웹 서버 끄기
+agent-dash restart    # 웹 서버 다시 켜기
+agent-dash status     # 설치 정보, 웹 서버 상태, 포트, 등록 세션 수
+agent-dash tui        # 터미널 화면 (q 종료, ? 키 도움말)
 ```
 
-tmux나 zellij 안에서 실행할 필요는 없습니다. 웹 서버는 백그라운드로 따로 실행되므로 SSH 연결을 끊어도 계속 돕니다. 서버를 재부팅하면 꺼지므로 그때는 `agent-dash start`를 다시 실행합니다. 터미널 화면은 SSH 터미널에서 필요할 때 엽니다.
+- tmux, zellij 안에서 실행할 필요 없음
+  - 웹 서버는 백그라운드로 실행되어 SSH 연결을 끊어도 유지
+  - 서버 재부팅 후에는 `agent-dash start` 다시 실행
+- 원격 서버의 웹 화면 접속
+  - 로컬 PC에서 SSH 터널 연결 후 브라우저로 `http://localhost:<포트>` 접속
+  - 터널 명령은 `agent-dash start` 실행 시 사용자, 주소, SSH 포트를 채워 안내
 
-웹 서버는 `127.0.0.1`에만 열립니다. 원격 서버라면 로컬 PC에서 터널을 연 뒤 브라우저로 `http://localhost:<포트>`에 접속합니다.
+    ```bash
+    ssh -f -N -L <포트>:127.0.0.1:<포트> <사용자>@<서버>
+    ```
 
-```bash
-ssh -f -N -L <포트>:127.0.0.1:<포트> <사용자>@<서버>
-```
-
-`-f`를 붙이면 터미널을 닫아도 터널이 유지됩니다. 끊겨도 자동으로 다시 연결하려면 `autossh -M 0 -f -N -L ...`을 씁니다. 자세한 내용은 [MANUAL.md](MANUAL.md)를 봅니다.
+  - `-f`: 터미널을 닫아도 터널 유지
+  - 끊겨도 자동으로 다시 연결하려면 `autossh -M 0 -f -N -L ...` 사용
+- 자세한 내용: [MANUAL.md](MANUAL.md)
 
 ## 업데이트
 
 ```bash
-agent-dash update                     # 화면 종류, 포트, 등록 목록은 그대로 두고 최신 버전으로 바꿈
-agent-dash update --mode both         # 화면 종류를 바꿀 때
+agent-dash update                  # 최신 버전으로 업데이트
+agent-dash update --mode both      # 화면 종류를 바꿀 때
 ```
 
-설치 명령(`curl ... | sh`)을 다시 실행해도 같습니다. 웹 서버가 켜져 있었다면 업데이트 뒤 다시 켭니다.
-
-새 버전이 나오면 `agent-dash` 명령을 실행할 때, 그리고 웹 화면과 터미널 화면 위쪽에 안내가 나옵니다. 확인은 하루에 한 번 GitHub의 버전 파일을 내려받는 것뿐입니다. 끄려면 `~/.agentdash/config.json`에 `"update_check": false`를 넣습니다. 바뀐 내용은 [CHANGELOG.md](CHANGELOG.md)에 있습니다.
+- 화면 종류, 포트, 등록 목록 유지
+- 켜져 있던 웹 서버는 업데이트 후 다시 켬
+- 설치 명령(`curl ... | sh`)을 다시 실행해도 같음
+- 새 버전 안내
+  - `agent-dash` 명령 실행 시, 웹 화면과 터미널 화면 위쪽에 표시
+  - 하루 한 번 GitHub의 버전 파일만 내려받아 비교 (보내는 정보 없음)
+  - 끄기: `~/.agentdash/config.json`에 `"update_check": false`
+- 변경 내용: [CHANGELOG.md](CHANGELOG.md)
 
 ## 삭제
 
@@ -113,11 +149,12 @@ agent-dash uninstall                  # 설치 전 상태로 되돌림
 agent-dash uninstall --purge-backup   # 원복용 백업까지 삭제
 ```
 
-설치한 모든 파일은 설치 기록에 남고, 삭제하면 기록을 거꾸로 따라가 설치 전 상태로 되돌립니다. `~/.local/bin`처럼 다른 프로그램과 함께 쓰는 폴더는 비어 있을 때만 지웁니다.
+- 설치한 모든 파일을 설치 기록에 남기고, 삭제 시 기록을 거꾸로 따라 되돌림
+- `~/.local/bin`처럼 다른 프로그램과 함께 쓰는 폴더는 비어 있을 때만 삭제
 
 ## 개발
 
 ```bash
 python3 -m unittest discover -s tests
-./install.sh          # 저장소 안에서 실행하면 내려받지 않고 이 폴더의 코드를 설치
+./install.sh          # 저장소 안에서 실행하면 이 폴더의 코드로 설치
 ```
