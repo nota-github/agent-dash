@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections import deque
 
 from agentdash.plan import Plan
 from agentdash.sources import LineReader, LocalFS
@@ -71,8 +72,10 @@ class Transcript:
         self.errors: list[dict] = []
         self.error_streak: tuple[str, int] = ("", 0)
         self.plan = Plan()
+        self.last_turn_ts: str | None = None
         self.agent_calls: dict[str, dict] = {}  # tool_use id -> 호출 정보
         self.tool_count = 0
+        self.tool_times: deque = deque(maxlen=3000)  # 도구 호출 시각 (활동량 계산용, 내용은 저장하지 않는다)
         self.error_total = 0
         self.background: dict[str, dict] = {}  # tool_use id -> 백그라운드 작업
         self._bg_marked: set[str] = set()
@@ -153,10 +156,13 @@ class Transcript:
                 elif not r.get("isMeta"):
                     self.last_kind = "user"
                     self.last_stop = None
+                    self.last_turn_ts = ts  # 새 턴이 시작된 시각 (내용은 저장하지 않는다)
 
     def _tool_use(self, b: dict, ts: str) -> None:
         name, inp, tid = b.get("name", ""), b.get("input") or {}, b.get("id")
         self.tool_count += 1
+        if ts:
+            self.tool_times.append(ts)
         self.last_tool = {"name": name, "summary": tool_summary(name, inp), "ts": ts}
         self.pending[tid] = {"name": name, "summary": tool_summary(name, inp), "ts": ts}
         if isinstance(inp, dict) and inp.get("run_in_background") is True:

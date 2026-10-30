@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections import deque
 
 from agentdash.claude import short
 from agentdash.plan import Plan
@@ -35,6 +36,7 @@ class CodexSession:
         self.last_ts = None
         self.turn_open = False
         self.turn_started = None
+        self.tool_times: deque = deque(maxlen=3000)
         self.turns = 0
         self.total = {}
         self.last_usage = {}
@@ -101,6 +103,8 @@ class CodexSession:
                 self.pending[p.get("call_id")] = {"name": name, "summary": f"{name}: {short(raw, 80)}", "ts": ts}
                 self.last_tool = self.pending[p.get("call_id")]
                 self.tool_count += 1
+                if ts:
+                    self.tool_times.append(ts)
                 if name == "update_plan":
                     try:
                         self.plan.apply("update_plan", json.loads(raw), ts)

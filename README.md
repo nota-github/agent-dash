@@ -33,6 +33,11 @@ A personal dashboard that shows the progress of your Claude Code and Codex sessi
 - **Status**
   - Running, waiting for user, user's turn to reply or approve, stalled, running in background
   - Cards waiting for your reply get a slowly moving background
+  - The circle on a card shows status only; progress is a separate bar with percent, steps done and time left
+  - The step in progress fills by activity (time and tool calls compared with finished steps), capped at 90%
+  - Sessions without plan steps show activity instead of a percent: turn time, tool calls, calls in the last 10 minutes
+  - Tip: ask your agents (CLAUDE.md, AGENTS.md) to split multi-step work with the plan tool and end step names with `[S]`, `[M]` or `[L]` for better estimates
+  - Mark a session as done yourself (web: 완료로 표시 button, terminal: `d`). It moves to the end and reopens automatically if the session becomes active again
 - **Where it runs**
   - Launch mode: remote (an app connected over SSH) or cli (started in a terminal on the server)
   - Server IP

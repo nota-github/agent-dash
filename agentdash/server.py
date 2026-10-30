@@ -145,6 +145,8 @@ def make_handler(state: State):
                     tr.add_dir(data["dir"]) if data.get("dir") else tr.add(data["key"])
                 elif url.path == "/api/untrack":
                     tr.remove_dir(data["dir"]) if data.get("dir") else tr.remove(data["key"])
+                elif url.path == "/api/complete":
+                    tr.set_completed(data["key"], bool(data.get("done", True)))
                 else:
                     return self._json(404, {"error": "not found"})
             except (KeyError, RuntimeError) as e:

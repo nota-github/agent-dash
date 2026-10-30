@@ -22,6 +22,7 @@ WAIT_GUESS_SEC = 60
 STALL_SEC = 600
 RUNNING_RECENT_SEC = 600
 PRIOR_SEC_PER_POINT = 240
+COMPLETE_GRACE_SEC = 30  # 완료로 표시한 직후 기록되는 마무리 활동은 다시 열지 않는다
 PROC_SCAN_SEC = 10  # 프로세스 목록은 이 간격으로만 다시 읽는다
 BACKGROUND_MAX_SEC = 6 * 3600  # 완료 알림 없이 이보다 오래된 백그라운드 작업은 끝난 것으로 본다
 CONTEXT_WINDOW = {"claude-opus": 1_000_000, "claude-sonnet": 1_000_000, "claude-haiku": 200_000}
@@ -144,14 +145,15 @@ class Tracked:
     def __init__(self, path: Path = STATE_DIR / "tracked.json"):
         self.path = path
         self.lock = threading.Lock()
-        self.data = {"sessions": [], "dirs": [], "untracked": []}
+        self.data = {"sessions": [], "dirs": [], "untracked": [], "completed": {}}
         self.load()
 
     def load(self) -> None:
         try:
             self.data = json.loads(self.path.read_text())
         except (OSError, ValueError):
-            self.data = {"sessions": [], "dirs": [], "untracked": []}
+            self.data = {"sessions": [], "dirs": [], "untracked": [], "completed": {}}
+        self.data.setdefault("completed", {})
         self.data.setdefault("sessions", [])
         self.data.setdefault("dirs", [])
         self.data.setdefault("untracked", [])
@@ -192,6 +194,16 @@ class Tracked:
         with self.lock:
             self.load()
             self.data["dirs"] = [x for x in self.data["dirs"] if x != os.path.abspath(d)]
+            self.save()
+
+    def set_completed(self, key: str, done: bool) -> None:
+        """사용자가 직접 완료로 표시한 세션. 표시한 뒤 새 활동이 생기면 snapshot에서 자동으로 푼다."""
+        with self.lock:
+            self.load()
+            if done:
+                self.data["completed"][key] = time.time()
+            else:
+                self.data["completed"].pop(key, None)
             self.save()
 
     def matches(self, key: str, cwd: str | None) -> bool:
@@ -307,7 +319,55 @@ def claude_status(t, now: float, other_activity: float = 0.0, headless: bool = F
     return "running", last, None
 
 
-def progress(steps: list[dict], child_progress: dict[str, float] | None = None) -> float | None:
+ACTIVE_MIN, ACTIVE_MAX = 0.05, 0.9  # 진행 중 단계는 이 범위 안에서만 채운다 (끝났다고 보지 않는다)
+STEP_MIN_SEC = 30  # 이보다 짧게 끝난 단계는 한꺼번에 완료 처리된 것으로 보고 속도 계산에서 뺀다
+
+
+def active_fraction(step: dict, steps: list[dict], now: float, prior: float = PRIOR_SEC_PER_POINT) -> float:
+    """진행 중 단계의 진척. 이 세션에서 끝난 단계들의 점수당 시간과 도구 호출 수에 견줘 계산한다.
+
+    끝난 단계가 없으면 점수당 기본 시간(prior)만 쓴다.
+    """
+    a = parse_ts(step.get("started"))
+    spent = max(0.0, now - a) if a else 0.0
+    sec_per_pt, tools_per_pt = [], []
+    for s in steps:
+        if s["status"] != DONE:
+            continue
+        sa, sb = parse_ts(s.get("started")), parse_ts(s.get("ended"))
+        if sa and sb and sb - sa >= STEP_MIN_SEC:
+            sec_per_pt.append((sb - sa) / step_points(s))
+            if s.get("tools"):
+                tools_per_pt.append(s["tools"] / step_points(s))
+    pts = step_points(step)
+    fracs = [spent / (pts * (sum(sec_per_pt) / len(sec_per_pt) if sec_per_pt else prior))]
+    if tools_per_pt and step.get("tools") is not None:
+        fracs.append(step.get("tools", 0) / (pts * sum(tools_per_pt) / len(tools_per_pt)))
+    frac = sum(fracs) / len(fracs)
+    return max(ACTIVE_MIN, min(ACTIVE_MAX, frac))
+
+
+RECENT_SEC = 600  # 최근 활동량을 세는 구간
+
+
+def activity(tool_times, turn_ts: str | None, now: float) -> dict:
+    """이번 턴의 경과 시간과 도구 호출 수, 최근 10분 도구 호출 수. 계획이 없는 세션의 진행 표시로 쓴다."""
+    turn_tools = sum(1 for t in tool_times if turn_ts and t >= turn_ts) if turn_ts else 0
+    recent = 0
+    for t in reversed(tool_times):
+        v = parse_ts(t)
+        if not v or now - v > RECENT_SEC:
+            break
+        recent += 1
+    a = parse_ts(turn_ts)
+    return {"turn_started": a, "turn_tools": turn_tools, "recent_tools": recent}
+
+
+def progress(steps: list[dict], child_progress: dict[str, float] | None = None, now: float | None = None) -> float | None:
+    """완료 단계 점수 + 진행 중 단계의 진척을 전체 점수로 나눈다.
+
+    진행 중 단계는 그 단계에서 띄운 서브 에이전트의 진행률을 먼저 쓰고, 없으면 활동량(시간, 도구 호출)으로 채운다.
+    """
     if not steps:
         return None
     total = points(steps)
@@ -316,7 +376,9 @@ def progress(steps: list[dict], child_progress: dict[str, float] | None = None) 
         if s["status"] == DONE:
             done += step_points(s)
         elif s["status"] == ACTIVE:
-            frac = (child_progress or {}).get(s["content"], 0.5)
+            frac = (child_progress or {}).get(s["content"])
+            if frac is None:
+                frac = active_fraction(s, steps, now) if now else 0.5
             done += step_points(s) * frac
     return done / total if total else None
 
@@ -506,8 +568,10 @@ class Registry:
                     sessions.append(self._claude_view(key, s, now, today, children.get(key, [])))
                 else:
                     sessions.append(self._codex_view(key, s, now, today))
+            self._apply_completed(sessions)
             sessions.sort(key=lambda d: (STATUS_ORDER.index(d["status"]), -(d["last_activity"] or 0)))
             summary = {
+                "done": sum(1 for d in sessions if d["status"] == "done"),
                 "waiting": sum(1 for d in sessions if d["status"] in ("needs_input", "maybe_waiting")),
                 "running": sum(1 for d in sessions if d["status"] == "running"),
                 "idle": sum(1 for d in sessions if d["status"] == "idle"),
@@ -524,6 +588,22 @@ class Registry:
                 "root_status": None if root is None else {"ok": root.ok, "error": root.error},
                 "tracked_dirs": self.tracked.data["dirs"],
             }
+
+    def _apply_completed(self, sessions: list[dict]) -> None:
+        """사용자가 완료로 표시한 세션은 상태를 완료로 바꾼다. 표시 뒤 새 활동이 있으면 다시 연다."""
+        done = self.tracked.data.get("completed") or {}
+        for d in sessions:
+            ts = done.get(d["key"])
+            if not ts:
+                continue
+            if (d.get("last_activity") or 0) > ts + COMPLETE_GRACE_SEC:
+                try:
+                    self.tracked.set_completed(d["key"], False)
+                except RuntimeError:
+                    pass
+                d["reopened_at"] = ts
+                continue
+            d.update(status="done", status_label=STATUS_LABEL["done"], eta=None, completed_at=ts, since=ts)
 
     def _scan_processes(self, now: float) -> None:
         """세션을 실행 중인 프로세스와 멀티플렉서. 데스크톱 앱에서 연 Codex 세션은 앱 서버가 실행하므로 찾지 않는다."""
@@ -569,7 +649,7 @@ class Registry:
                 st, _, _ = claude_status(t, now)
                 if st == "idle":
                     st = "done"
-            prog = progress(t.plan.steps)
+            prog = progress(t.plan.steps, now=now)
             if call and call.get("step"):
                 child_prog.setdefault(call["step"], []).append(1.0 if st == "done" else (prog if prog is not None else 0.5))
             tok = t.tokens()
@@ -613,14 +693,18 @@ class Registry:
                 "step": None, "status": cst, "status_label": STATUS_LABEL[cst],
                 "started": parse_ts(cfirst), "last": parse_ts(clast),
                 "tokens": ctok["io"], "context_pct": ctx, "tools": ctools, "error_count": cerr,
-                "steps": _steps_view(cplan.steps), "progress": progress(cplan.steps),
+                "steps": _steps_view(cplan.steps), "progress": progress(cplan.steps, now=now),
                 "current": (last_tool or {}).get("summary") if cst not in ("done",) else None,
                 "errors": cerrors[-3:], "model": c.model if isinstance(c, CodexSession) else c.main.model,
                 "process": self._proc_info.get(ckey),
             })
         cp = {k: sum(v) / len(v) for k, v in child_prog.items()}
         steps = s.main.plan.steps
-        prog = progress(steps, cp)
+        # 지난 턴의 계획이 끝났고 지금 턴에서는 계획을 세우지 않았다면 지난 계획은 보여주지 않는다.
+        # 실행 중인 세션이 100%로 보여 끝난 것처럼 읽히지 않게 한다.
+        if s.main.plan.finished_before(s.main.last_turn_ts):
+            steps = []
+        prog = progress(steps, cp, now=now)
         active = status in ("running", "needs_input", "maybe_waiting", "stalled")
         eta_range = eta(steps, now) if active and prog is not None and prog < 1 else None
         streak_tool, streak = s.main.error_streak
@@ -672,13 +756,15 @@ class Registry:
             "progress": prog, "eta": eta_range, "alerts": alerts, "timeline": timeline[-20:],
             "resume": cmd, "resume_note": note, "nodes": nodes, "files": sorted(s.main.files_touched, key=s.main.files_touched.get)[-30:],
             "model": s.main.model, "process": self._proc_info.get(key),
+            "session_steps": list(s.main.plan.session_counts()),
+            "activity": activity(s.main.tool_times, s.main.last_turn_ts, now),
         }
 
     def _codex_view(self, key, s: CodexSession, now, today) -> dict:
         status = _codex_status(s, now)
         tok = s.tokens()
         steps = s.plan.steps
-        prog = progress(steps)
+        prog = progress(steps, now=now)
         cmd, note = resume_command("codex", "codex", s.id, s.meta.get("cwd"), s.meta.get("originator"), status)
         cpct = _pct(s.context(), s.context_window or 0)
         timeline = [{"ts": parse_ts(r["ts"]), "kind": "plan", "text": _revision_text(r),
@@ -708,6 +794,8 @@ class Registry:
             "alerts": [{"kind": "context", "text": f"컨텍스트 {cpct}%"}] if cpct and cpct >= 85 else [],
             "timeline": timeline[-20:], "resume": cmd, "resume_note": note, "nodes": [node], "files": [],
             "model": s.model, "process": self._proc_info.get(key),
+            "session_steps": list(s.plan.session_counts()),
+            "activity": activity(s.tool_times, s.turn_started, now),
         }
 
 

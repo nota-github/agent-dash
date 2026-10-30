@@ -1,7 +1,8 @@
 """계획 단계 상태. 도구 호출을 순서대로 적용해 현재 단계와 변경 이력을 만든다.
 
 지원하는 도구:
-- Claude 데스크톱 `mcp__ccd_turn__update_plan`: items(전체 교체), advance, done/start
+- Claude 데스크톱 `mcp__ccd_turn__update_plan`: items(전체 교체), advance, done/start.
+  턴 마무리 `mcp__ccd_turn__wrap_up`은 남은 단계를 모두 완료로 바꾼다
 - Claude `TodoWrite`: todos 전체 교체
 - Claude `TaskCreate`, `TaskUpdate`: 항목 추가, 상태 변경
 - Codex `update_plan`: plan 전체 교체
@@ -32,6 +33,26 @@ class Plan:
         self.steps: list[dict] = []
         self.revisions: list[dict] = []
         self.tasks: dict[str, dict] = {}  # TaskCreate id -> step
+        self.updated: str | None = None  # 마지막으로 계획을 바꾼 시각
+        self.closed: str | None = None  # 턴을 마무리해 계획이 끝난 시각
+        # 앞선 턴에서 끝난 계획의 단계 수. 새 턴의 계획이 오면 지금 계획을 여기에 더하고 비운다.
+        self.archived_done = 0
+        self.archived_total = 0
+
+    def _archive_if_new_turn(self) -> None:
+        if self.closed and (self.updated or "") <= self.closed and self.steps:
+            self.archived_total += len(self.steps)
+            self.archived_done += sum(1 for s in self.steps if s["status"] == DONE)
+            self.steps, self.tasks, self.closed = [], {}, None
+
+    def session_counts(self) -> tuple[int, int]:
+        """세션 전체에서 (완료 단계 수, 계획한 단계 수). 지난 턴의 계획을 포함한다."""
+        return (self.archived_done + sum(1 for s in self.steps if s["status"] == DONE),
+                self.archived_total + len(self.steps))
+
+    def finished_before(self, turn_ts: str | None) -> bool:
+        """계획이 앞선 턴에서 끝났고, 그 뒤 새 턴에서는 계획을 세우지 않았는지."""
+        return bool(self.closed and turn_ts and turn_ts > self.closed and (self.updated or "") <= self.closed)
 
     def _step(self, content: str, status: str, ts: str) -> dict:
         m = SIZE_RE.search(content or "")
@@ -77,6 +98,9 @@ class Plan:
             return False
         if tool.endswith("update_plan") and tool != "update_plan" or tool == "mcp__ccd_turn__update_plan":
             if isinstance(inp.get("items"), list):
+                self._archive_if_new_turn()
+            self.updated = ts
+            if isinstance(inp.get("items"), list):
                 self._replace([(i.get("content", ""), norm_status(i.get("status"))) for i in inp["items"] if isinstance(i, dict)], ts)
             if inp.get("advance"):
                 cur = next((s for s in self.steps if s["status"] == ACTIVE), None)
@@ -95,9 +119,23 @@ class Plan:
                         self._set_status(s, PENDING, ts)
                 self._set_status(self.steps[n - 1], ACTIVE, ts)
             return True
+        if tool == "mcp__ccd_turn__wrap_up":
+            # 데스크톱 앱은 턴을 마무리할 때 남은 단계를 모두 완료로 표시한다. 같은 기준을 쓴다.
+            for st in self.steps:
+                if st["status"] != DONE:
+                    self._set_status(st, DONE, ts)
+            if self.steps:
+                self.closed = ts
+            return True
         if tool == "TodoWrite" and isinstance(inp.get("todos"), list):
+            self._archive_if_new_turn()
+            self.updated = ts
             self._replace([(t.get("content", ""), norm_status(t.get("status"))) for t in inp["todos"] if isinstance(t, dict)], ts)
             return True
+        if tool in ("TaskCreate", "TaskUpdate"):
+            if tool == "TaskCreate":
+                self._archive_if_new_turn()
+            self.updated = ts
         if tool == "TaskCreate":
             st = self._step(inp.get("subject") or inp.get("description") or "", PENDING, ts)
             self.steps.append(st)
@@ -114,6 +152,10 @@ class Plan:
         if tool == "update_plan" and isinstance(inp.get("plan"), list):
             self._replace([(p.get("step", ""), norm_status(p.get("status"))) for p in inp["plan"] if isinstance(p, dict)], ts)
             return True
+        # 계획 도구가 아닌 호출은 진행 중 단계의 활동량으로 센다
+        cur = self.current()
+        if cur is not None:
+            cur["tools"] = cur.get("tools", 0) + 1
         return False
 
     def current(self) -> dict | None:

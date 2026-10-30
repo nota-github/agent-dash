@@ -310,6 +310,61 @@ class ProcsTest(unittest.TestCase):
         self.assertIsNone(mk(["/x/codex-code-mode-host"]).agent)
 
 
+class WrapUpTest(unittest.TestCase):
+    def test_wrap_up_completes_remaining_steps(self):
+        p = Plan()
+        p.apply("mcp__ccd_turn__update_plan", {"items": [
+            {"content": "a", "status": "completed"}, {"content": "b", "status": "in_progress"},
+            {"content": "c", "status": "pending"}]}, "2026-10-29T01:00:00Z")
+        p.apply("mcp__ccd_turn__wrap_up", {"recap": "x"}, "2026-10-29T01:05:00Z")
+        self.assertEqual([s["status"] for s in p.steps], ["completed"] * 3)
+        self.assertIsNone(p.current())
+        self.assertFalse(p.finished_before("2026-10-29T01:04:00Z"))
+        self.assertTrue(p.finished_before("2026-10-29T02:00:00Z"))  # 다음 턴에 계획 없음
+        p.apply("mcp__ccd_turn__update_plan", {"items": [{"content": "d", "status": "in_progress"}]}, "2026-10-29T02:01:00Z")
+        self.assertFalse(p.finished_before("2026-10-29T02:00:00Z"))  # 새 턴에서 계획을 세움
+
+
+class CompletedTest(unittest.TestCase):
+    def test_mark_done_and_reopen_on_new_activity(self):
+        with tempfile.TemporaryDirectory() as t:
+            tr = model.Tracked(Path(t) / "tracked.json")
+            reg = object.__new__(model.Registry)
+            reg.tracked = tr
+            tr.set_completed("claude:a", True)
+            mark = tr.data["completed"]["claude:a"]
+            quiet = {"key": "claude:a", "status": "idle", "status_label": "x", "last_activity": mark - 100, "eta": [1, 2]}
+            reg._apply_completed([quiet])
+            self.assertEqual((quiet["status"], quiet["eta"]), ("done", None))
+            busy = {"key": "claude:a", "status": "running", "status_label": "x", "last_activity": mark + 600}
+            reg._apply_completed([busy])
+            self.assertEqual(busy["status"], "running")  # 표시 뒤 새 활동이 있으면 다시 연다
+            self.assertNotIn("claude:a", model.Tracked(Path(t) / "tracked.json").data["completed"])
+
+
+class ProgressTest(unittest.TestCase):
+    def test_active_step_fills_by_time_and_tools(self):
+        t0 = model.parse_ts("2026-10-29T01:00:00Z")
+        steps = [
+            {"content": "a", "size": None, "status": "completed", "started": "2026-10-29T01:00:00Z", "ended": "2026-10-29T01:10:00Z", "tools": 20},
+            {"content": "b", "size": None, "status": "in_progress", "started": "2026-10-29T01:10:00Z", "ended": None, "tools": 10},
+            {"content": "c", "size": None, "status": "pending", "started": None, "ended": None},
+        ]
+        # b는 5분, 도구 10회: 끝난 단계(10분, 20회)의 절반 → 전체 (1 + 0.5) / 3
+        self.assertAlmostEqual(model.progress(steps, now=t0 + 15 * 60), 0.5, places=2)
+        # 아무리 오래 걸려도 진행 중 단계는 90%를 넘지 않는다
+        steps[1]["tools"] = 999
+        self.assertAlmostEqual(model.progress(steps, now=t0 + 10 * 3600), (1 + 0.9) / 3, places=2)
+
+    def test_session_counts_keep_previous_turn_plans(self):
+        p = Plan()
+        p.apply("mcp__ccd_turn__update_plan", {"items": [{"content": "a", "status": "in_progress"}, {"content": "b", "status": "pending"}]}, "2026-10-29T01:00:00Z")
+        p.apply("mcp__ccd_turn__wrap_up", {}, "2026-10-29T01:30:00Z")
+        p.apply("mcp__ccd_turn__update_plan", {"items": [{"content": "c", "status": "in_progress"}]}, "2026-10-29T02:00:00Z")
+        self.assertEqual([s["content"] for s in p.steps], ["c"])
+        self.assertEqual(p.session_counts(), (2, 3))
+
+
 class LaunchTest(unittest.TestCase):
     def test_launch_is_remote_or_cli(self):
         L = model.launch_of

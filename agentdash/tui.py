@@ -27,10 +27,10 @@ LEFT_W = 42  # 가로형에서 왼쪽 칸 너비
 SORTS = [("recent", "최근 실행순"), ("name", "이름순"), ("agent", "에이전트별"), ("custom", "직접 배치")]
 AGENTS = [("all", "전체"), ("claude", "Claude"), ("codex", "Codex")]
 LAYOUTS = [("grid", "세로형"), ("list", "가로형")]
-FILTERS = [("all", "전체"), ("wait", "대기"), ("running", "실행 중"), ("idle", "입력 차례")]
+FILTERS = [("all", "전체"), ("wait", "대기"), ("running", "실행 중"), ("idle", "입력 차례"), ("done", "완료")]
 SPIN = "◐◓◑◒"
 # 화면 아래 키 막대. 자주 쓰는 순서로 둔다.
-KEY_BAR = [("a", "세션 관리"), ("x", "해제"), ("Enter", "펼치기"), ("c", "재개 명령 복사"), ("r", "새로고침"),
+KEY_BAR = [("a", "세션 관리"), ("x", "해제"), ("d", "완료 표시"), ("Enter", "펼치기"), ("c", "재개 명령 복사"), ("r", "새로고침"),
            ("s", "정렬"), ("[ ]", "옮기기"), ("v", "세로/가로"), ("f", "상태 필터"), ("g", "Claude/Codex"),
            ("←↑→↓", "이동"), ("?", "도움말"), ("q", "종료")]
 # ? 도움말 창
@@ -39,12 +39,13 @@ HELP = [
     ("Enter, Space", "선택한 카드 펼치기, 접기 (계획 단계, 요약, 경로, 토큰, 이력)"),
     ("a", "세션 관리: 세션 등록과 해제 (Enter 등록/해제, Esc 닫기)"),
     ("x", "선택한 세션 트래킹 해제 (확인 창에서 y 확인, n 취소)"),
+    ("d", "선택한 세션을 완료로 표시, 다시 누르면 다시 열기 (새 활동이 생기면 자동으로 다시 열림)"),
     ("c", "선택한 세션의 이어서 작업하기 명령 복사"),
     ("r", "지금 바로 다시 읽기 (평소에는 2초마다 자동으로 갱신)"),
     ("s", "정렬 바꾸기: 최근 실행순, 이름순, 에이전트별, 직접 배치"),
     ("[ ]", "선택한 카드를 앞, 뒤로 옮기기 (직접 배치로 바뀜)"),
     ("v", "세로형, 가로형 보기 바꾸기"),
-    ("f", "상태 필터: 전체, 대기, 실행 중, 입력 차례"),
+    ("f", "상태 필터: 전체, 대기, 실행 중, 입력 차례, 완료"),
     ("g", "에이전트 필터: 전체, Claude, Codex"),
     ("?", "이 도움말"),
     ("q", "종료"),
@@ -212,11 +213,27 @@ def left_lines(s: dict, w: int, tick: int, host: dict | None = None) -> list:
     title = cut(s.get("title") or display_name(s.get("workspace")) or "제목 없음", w - 2)
     out = [[(" " + title + " " * max(0, w - 1 - width(title)), col("headline") | curses.A_BOLD)]]
     # 바로 아래: 진행률
-    if s.get("progress") is not None:
+    if s["status"] == "done" and s.get("completed_at"):
+        out.append([(f"✓ {fmt_date(s['completed_at'])}에 완료로 표시함", col("green") | curses.A_BOLD)])
+    elif s.get("progress") is not None:
         pct = f" {round(s['progress'] * 100)}%"
         out.append(bar(s["progress"], w - len(pct)) + [(pct, curses.A_BOLD)])
     else:
-        out.append([("진행률 없음 (계획 단계를 쓰지 않은 세션)", dim)])
+        # 계획이 없으면 퍼센트 대신 활동량을 보여준다
+        a = s.get("activity") or {}
+        bits = []
+        if a.get("turn_started"):
+            end = time.time() if s["status"] == "running" else (s.get("last_activity") or time.time())
+            bits.append(("이번 턴 " if s["status"] == "running" else "지난 턴 ") + fmt_dur(end - a["turn_started"]) + ("째" if s["status"] == "running" else ""))
+        if a.get("turn_tools"):
+            bits.append(f"도구 {a['turn_tools']}회")
+        if s["status"] == "running" and a.get("recent_tools") is not None:
+            bits.append(f"최근 10분 {a['recent_tools']}회")
+        out.append([(cut(", ".join(bits) if bits else "계획 단계 없음", w), dim)])
+    ss = s.get("session_steps") or [0, 0]
+    shown = len((s.get("nodes") or [{}])[0].get("steps") or [])
+    if ss[1] and ss[1] != shown:
+        out.append([(cut(f"세션 누적 {ss[0]}/{ss[1]} 단계", w), dim)])
     if host:
         out.append([("서버 ", dim), (cut(host.get("ip") or host.get("name") or "", w - 5), curses.A_BOLD),
                     (cut(f"  {host['name']}" if host.get("ip") and host.get("name") else "", max(0, w - 21)), dim)])
@@ -425,6 +442,8 @@ class App:
             items = [s for s in items if s["status"] in ("running", "stalled")]
         elif f == "idle":
             items = [s for s in items if s["status"] == "idle"]
+        elif f == "done":
+            items = [s for s in items if s["status"] == "done"]
         recent = lambda s: -(s.get("last_activity") or 0)  # noqa: E731
         if self.sort == "name":
             items.sort(key=lambda s: (display_name(s.get("workspace")).lower(), s.get("title") or "", recent(s)))
@@ -435,7 +454,8 @@ class App:
             items.sort(key=lambda s: (idx.get(s["key"], -1), recent(s)))
         else:
             items.sort(key=recent)
-        return items
+        # 완료로 표시한 세션은 맨 뒤 (정렬은 그 안에서 유지)
+        return [s for s in items if s["status"] != "done"] + [s for s in items if s["status"] == "done"]
 
     # ----- 그리기 -----
     def put(self, y: int, x: int, segs: list, maxw: int, last_row_ok: bool = False) -> None:
@@ -772,6 +792,14 @@ class App:
                     self.flash("해제했습니다. a를 누르면 세션 관리 목록에서 다시 추가할 수 있습니다")
                 except RuntimeError as e:
                     self.flash(str(e))
+        elif k == ord("d") and cur:
+            done = not (cur["status"] == "done" and cur.get("completed_at"))
+            try:
+                self.reg.tracked.set_completed(cur["key"], done)
+                self.wake.set()
+                self.flash("완료로 표시했습니다. 새 활동이 생기면 다시 열립니다" if done else "다시 열었습니다")
+            except RuntimeError as e:
+                self.flash(str(e))
         elif k == ord("a"):
             self.add_panel()
         elif k == ord("s"):
