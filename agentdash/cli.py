@@ -525,7 +525,7 @@ def main(argv=None) -> int:
     return rc
 
 
-# 이 명령을 실행한 뒤에는 새 버전이 있는지 알려준다 (하루 한 번만 실제로 확인한다)
+# 이 명령을 실행한 뒤에는 새 버전이 있는지 알려준다 (한 시간에 한 번만 실제로 확인한다)
 NOTICE_AFTER = {"status", "start", "stop", "restart", "sessions", "track", "untrack"}
 
 

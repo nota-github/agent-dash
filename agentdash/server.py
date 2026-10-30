@@ -39,14 +39,14 @@ class State:
         threading.Thread(target=self._check_updates, daemon=True).start()
 
     def _check_updates(self) -> None:
-        """새 버전 확인은 네트워크를 쓰므로 화면 갱신과 따로 돈다. 실제 확인은 하루 한 번이다."""
+        """새 버전 확인은 네트워크를 쓰므로 화면 갱신과 따로 돈다. 10분마다 보고, 실제로 받아 오는 것은 한 시간에 한 번이다."""
         from agentdash import updates
         while True:
             try:
                 self.app = updates.info()
             except Exception:
                 pass
-            time.sleep(3600)
+            time.sleep(600)
 
     def loop(self) -> None:
         while True:

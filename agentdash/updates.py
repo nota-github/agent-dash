@@ -1,6 +1,6 @@
 """새 버전 확인.
 
-GitHub main 브랜치의 version.py를 하루에 한 번만 읽고 결과를 ~/.agentdash/update-check.json에 둔다.
+GitHub main 브랜치의 version.py를 한 시간에 한 번만 읽고 결과를 ~/.agentdash/update-check.json에 둔다.
 보내는 정보는 없다(파일 하나를 내려받기만 한다). 끄려면 config.json에 "update_check": false를 두거나
 AGENT_DASH_NO_UPDATE_CHECK=1을 준다.
 """
@@ -18,7 +18,7 @@ from agentdash.version import __version__
 
 LATEST_URL = "https://raw.githubusercontent.com/nota-github/agent-dash/main/agentdash/version.py"
 CACHE = STATE_DIR / "update-check.json"
-CHECK_SEC = 24 * 3600
+CHECK_SEC = 3600  # 한 시간에 한 번만 실제로 확인한다
 TIMEOUT_SEC = 2.0
 
 
@@ -47,7 +47,7 @@ def _read_cache() -> dict:
 
 
 def latest(force: bool = False) -> str | None:
-    """최신 버전 문자열. 하루 안에 확인했으면 저장한 값을 쓴다. 실패하면 None."""
+    """최신 버전 문자열. 한 시간 안에 확인했으면 저장한 값을 쓴다. 실패하면 None."""
     if not enabled():
         return None
     cache = _read_cache()

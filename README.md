@@ -169,7 +169,7 @@ agent-dash update --mode both      # change the view type
 - Running the install command (`curl ... | sh`) again does the same
 - New version notice
   - Shown when you run `agent-dash`, and at the top of the web and terminal views
-  - Checks once a day by downloading one version file from GitHub (nothing is sent)
+  - Checks once an hour by downloading one version file from GitHub (nothing is sent)
   - To turn it off: add `"update_check": false` to `~/.agentdash/config.json`
 - Changes: [CHANGELOG.md](CHANGELOG.md)
 

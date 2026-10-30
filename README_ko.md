@@ -169,7 +169,7 @@ agent-dash update --mode both      # 화면 종류를 바꿀 때
 - 설치 명령(`curl ... | sh`)을 다시 실행해도 같음
 - 새 버전 안내
   - `agent-dash` 명령 실행 시, 웹 화면과 터미널 화면 위쪽에 표시
-  - 하루 한 번 GitHub의 버전 파일만 내려받아 비교 (보내는 정보 없음)
+  - 1시간에 한 번 GitHub의 버전 파일만 내려받아 비교 (보내는 정보 없음)
   - 끄기: `~/.agentdash/config.json`에 `"update_check": false`
 - 변경 내용: [CHANGELOG.md](CHANGELOG.md)
 

@@ -61,7 +61,7 @@ agent-dash update --mode web     # 화면 종류를 바꿀 때
 - 웹 서버가 켜져 있었다면 업데이트 뒤 다시 켭니다.
 - 포트를 바꾸려면 `AGENT_DASH_PORT=<포트> agent-dash update --force`를 실행합니다.
 - 이미 최신 버전이면 아무것도 하지 않습니다. 같은 버전을 다시 설치하려면 `--force`를 줍니다.
-- 새 버전이 나오면 `agent-dash`, `agent-dash status` 같은 명령을 실행할 때와 웹 화면, 터미널 화면 위쪽에 안내가 나옵니다. GitHub에서 버전 파일 하나를 하루에 한 번 내려받아 비교하며, 보내는 정보는 없습니다. `AGENT_DASH_NO_UPDATE_CHECK=1`이나 `config.json`의 `"update_check": false`로 끕니다.
+- 새 버전이 나오면 `agent-dash`, `agent-dash status` 같은 명령을 실행할 때와 웹 화면, 터미널 화면 위쪽에 안내가 나옵니다. GitHub에서 버전 파일 하나를 한 시간에 한 번 내려받아 비교하며, 보내는 정보는 없습니다. `AGENT_DASH_NO_UPDATE_CHECK=1`이나 `config.json`의 `"update_check": false`로 끕니다.
 - 버전별 변경 내용은 `CHANGELOG.md`에 있습니다. `agent-dash --version`으로 지금 버전을 봅니다.
 
 ## 3. 사용 방식
