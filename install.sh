@@ -11,7 +11,7 @@
 # 셸 설정 파일(.zshrc 등)은 바꾸지 않는다. PATH 추가 방법만 안내한다.
 #
 # 환경 변수로 질문을 건너뛸 수 있다
-#   AGENT_DASH_MODE=web|tui|both   AGENT_DASH_PORT=24xxx
+#   AGENT_DASH_MODE=web|tui|both   AGENT_DASH_PORT=24xxx   AGENT_DASH_READ_ROOT=1
 #   AGENT_DASH_REPO=owner/repo     AGENT_DASH_REF=main     AGENT_DASH_SRC=<코드 폴더>
 #
 # 이전 방식(설치 계획을 직접 적용): ./install.sh --plan base [--root] [--dry-run]
@@ -24,6 +24,7 @@ PORT_MAX=25000
 TMP=""
 
 say() { printf '%s\n' "$*"; }
+step() { printf '  - %s\n' "$*"; }
 die() { printf '\n설치 중단: %s\n' "$*" >&2; exit 1; }
 cleanup() { if [ -n "$TMP" ]; then rm -rf "$TMP"; fi; }
 trap cleanup EXIT INT TERM
@@ -93,20 +94,26 @@ UPGRADE=0
 WAS_RUNNING=0
 OLD_MODE=""
 OLD_PORT=""
+OLD_READ_ROOT=""
+conf_get() {
+    "$PY" -I -c 'import json, sys; v = json.load(open(sys.argv[1])).get(sys.argv[2]); print("" if v in (None, False) else v)' \
+        "$HOME/.agentdash/config.json" "$1" 2>/dev/null || true
+}
 if "$PY" -I "$CLI" status --quiet; then
     UPGRADE=1
-    CONF="$HOME/.agentdash/config.json"
-    if [ -f "$CONF" ]; then
-        OLD_MODE=$("$PY" -I -c 'import json, sys; print(json.load(open(sys.argv[1])).get("mode") or "")' "$CONF" 2>/dev/null || true)
-        OLD_PORT=$("$PY" -I -c 'import json, sys; print(json.load(open(sys.argv[1])).get("port") or "")' "$CONF" 2>/dev/null || true)
+    if [ -f "$HOME/.agentdash/config.json" ]; then
+        OLD_MODE=$(conf_get mode)
+        OLD_PORT=$(conf_get port)
+        OLD_READ_ROOT=$(conf_get read_root)
     fi
+    say "이미 설치돼 있습니다. 새 버전으로 바꿉니다. 등록한 세션 목록과 설정은 유지합니다."
     PIDF="$HOME/.agentdash/server.pid"
     if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF")" 2>/dev/null; then
         WAS_RUNNING=1
+        step "웹 서버를 잠시 끄는 중"
+        # stop은 프로세스가 끝날 때까지 기다린다. 포트를 놓아야 같은 포트를 다시 쓸 수 있다.
+        "$PY" -I "$CLI" stop >/dev/null 2>&1 || true
     fi
-    "$PY" -I "$CLI" stop >/dev/null 2>&1 || true
-    say "이미 설치돼 있습니다. 새 버전으로 바꿉니다. 등록한 세션 목록은 유지합니다."
-    say ""
 fi
 
 # ---------- 3. 설치할 화면 ----------
@@ -114,6 +121,7 @@ MODE="${AGENT_DASH_MODE:-}"
 case "$OLD_MODE" in web) DEF=1 ;; tui) DEF=2 ;; *) DEF=3 ;; esac
 while :; do
     if [ -z "$MODE" ]; then
+        say ""
         say "설치할 화면을 고르세요."
         say "  1) 웹 화면      브라우저로 봅니다. 원격 서버라면 SSH 터널로 접속합니다."
         say "  2) 터미널 화면  SSH 터미널 안에서 바로 봅니다(TUI)."
@@ -139,6 +147,8 @@ port_free() {
 import socket, sys
 port = int(sys.argv[1])
 s = socket.socket()
+# 웹 서버와 같은 기준으로 확인한다. 방금 끈 서버의 연결이 남은 포트(TIME_WAIT)도 다시 쓸 수 있다.
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 try:
     s.bind(("127.0.0.1", port))
 except OSError:
@@ -153,6 +163,11 @@ valid_port() {
 }
 PORT=""
 if [ "$MODE" != "tui" ]; then
+    # 업데이트라면 이전 웹 서버가 포트를 놓을 때까지 잠시 기다린다
+    if [ -n "$OLD_PORT" ] && valid_port "$OLD_PORT"; then
+        n=0
+        while [ "$n" -lt 20 ] && ! port_free "$OLD_PORT"; do sleep 0.5; n=$((n + 1)); done
+    fi
     if [ -n "${AGENT_DASH_PORT:-}" ]; then
         valid_port "$AGENT_DASH_PORT" || die "AGENT_DASH_PORT가 올바르지 않습니다: $AGENT_DASH_PORT"
         port_free "$AGENT_DASH_PORT" || die "포트 $AGENT_DASH_PORT 는 이미 사용 중입니다."
@@ -160,6 +175,8 @@ if [ "$MODE" != "tui" ]; then
     elif [ -n "$OLD_PORT" ] && valid_port "$OLD_PORT" && port_free "$OLD_PORT"; then
         PORT="$OLD_PORT"
     else
+        say ""
+        step "비어 있는 포트를 찾는 중 ($PORT_MIN~$PORT_MAX)"
         span=$((PORT_MAX - PORT_MIN + 1))
         start=$(( $(id -u) * 37 % span ))
         i=0
@@ -187,8 +204,13 @@ fi
 APP="$HOME/.local/share/agent-dash"
 BIN="$HOME/.local/bin/agent-dash"
 BIN_PY_CLI="$APP/agentdash/cli.py"
+READ_ROOT=""
+case "${AGENT_DASH_READ_ROOT:-$OLD_READ_ROOT}" in 1|true|True|yes) READ_ROOT="--read-root" ;; esac
+say ""
+say "설치를 진행합니다."
 KEEP=""
 if [ "$UPGRADE" = 1 ]; then
+    step "기존 설치를 정리하는 중 (등록 목록은 보관)"
     KEEP=$(mktemp -d)
     for f in tracked.json tui.json; do
         [ -f "$HOME/.agentdash/$f" ] && cp -p "$HOME/.agentdash/$f" "$KEEP/$f"
@@ -196,11 +218,11 @@ if [ "$UPGRADE" = 1 ]; then
     "$PY" -I "$CLI" uninstall --yes >/dev/null || die "기존 설치를 되돌리지 못했습니다. agent-dash uninstall 결과를 확인하세요."
 fi
 
-say ""
+step "코드와 설정을 설치하는 중"
 if [ -n "$PORT" ]; then
-    "$PY" -I "$CLI" install app --src "$SRC" --mode "$MODE" --port "$PORT" >/dev/null || die "설치에 실패했습니다."
+    "$PY" -I "$CLI" install app --src "$SRC" --mode "$MODE" --port "$PORT" $READ_ROOT >/dev/null || die "설치에 실패했습니다."
 else
-    "$PY" -I "$CLI" install app --src "$SRC" --mode "$MODE" >/dev/null || die "설치에 실패했습니다."
+    "$PY" -I "$CLI" install app --src "$SRC" --mode "$MODE" $READ_ROOT >/dev/null || die "설치에 실패했습니다."
 fi
 if [ -n "$KEEP" ]; then
     for f in tracked.json tui.json; do
@@ -210,15 +232,20 @@ if [ -n "$KEEP" ]; then
 fi
 RESTARTED=0
 if [ "$WAS_RUNNING" = 1 ] && [ "$MODE" != "tui" ]; then
+    step "웹 서버를 다시 켜는 중"
     "$PY" -I "$BIN_PY_CLI" start >/dev/null 2>&1 && RESTARTED=1 || true
 fi
+step "완료"
+say ""
 
 # ---------- 6. 안내 ----------
 case "$MODE" in web) MODE_TEXT="웹 화면" ;; tui) MODE_TEXT="터미널 화면" ;; *) MODE_TEXT="웹 화면, 터미널 화면" ;; esac
 CMD="agent-dash"
 ON_PATH=1
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) ON_PATH=0; CMD="~/.local/bin/agent-dash" ;; esac
-HOST=$("$PY" -I -c 'import sys; sys.path.insert(0, sys.argv[1]); from agentdash.model import host_info; h = host_info(); print(h["ip"] or h["name"])' "$APP" 2>/dev/null || hostname)
+# 터널 명령: SSH로 접속한 터미널이면 실제로 접속한 주소와 SSH 포트를 쓴다
+TUNNEL=$("$PY" -I -c 'import sys; sys.path.insert(0, sys.argv[1]); from agentdash.model import tunnel_command; print(tunnel_command(int(sys.argv[2]), sys.argv[3]))' "$APP" "${PORT:-0}" "$(id -un)" 2>/dev/null || echo "ssh -f -N -L ${PORT}:127.0.0.1:${PORT} $(id -un)@<서버 주소>")
+case "${SSH_CONNECTION:-}" in "") SSH_KNOWN=0 ;; *) SSH_KNOWN=1 ;; esac
 
 if [ "$UPGRADE" = 1 ]; then say "업데이트를 마쳤습니다."; else say "설치를 마쳤습니다."; fi
 say "  화면: $MODE_TEXT${PORT:+, 웹 포트 $PORT}"
@@ -259,8 +286,11 @@ if [ "$MODE" != "tui" ]; then
     say "  서버 자체를 재부팅하면 꺼지므로 그때는 $CMD start 를 다시 실행합니다."
     say "  주소: http://127.0.0.1:$PORT (이 서버 안에서만 열립니다)"
     say "  원격 서버라면 로컬 PC 터미널에서 SSH 터널을 열고 브라우저로 http://localhost:$PORT 에 접속합니다."
-    say "    ssh -f -N -L $PORT:127.0.0.1:$PORT $(id -un)@$HOST"
-    say "    (SSH 포트가 22가 아니면 -p <포트>를 붙입니다. 터널 끄기: pkill -f \"$PORT:127.0.0.1:$PORT\")"
+    say "    $TUNNEL"
+    if [ "$SSH_KNOWN" = 0 ]; then
+        say "    (SSH 포트가 22가 아니면 -p <포트>를 붙입니다)"
+    fi
+    say "    터널 끄기: pkill -f \"$PORT:127.0.0.1:$PORT\""
 fi
 if [ "$MODE" != "web" ]; then
     say ""

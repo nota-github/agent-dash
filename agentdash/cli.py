@@ -269,12 +269,14 @@ INSTALL_URL = f"https://raw.githubusercontent.com/{REPO}/main/install.sh"
 
 
 def _tunnel_hint(port: int) -> str:
-    from agentdash.model import host_info
-    user = os.environ.get("USER") or Path.home().name
-    h = host_info()
-    return (f"원격 서버라면 로컬 PC에서 터널을 연 뒤 브라우저로 http://localhost:{port} 에 접속:\n"
-            f"  ssh -f -N -L {port}:127.0.0.1:{port} {user}@{h['ip'] or h['name']}\n"
-            f"  (SSH 포트가 22가 아니면 -p <포트>를 붙인다. 끄기: pkill -f \"{port}:127.0.0.1:{port}\")")
+    from agentdash.model import ssh_target, tunnel_command
+    import getpass
+    user = getpass.getuser()
+    known = ssh_target()[1] is not None
+    return (f"원격 서버라면 로컬 PC 터미널에서 터널을 연 뒤 브라우저로 http://localhost:{port} 에 접속:\n"
+            f"  {tunnel_command(port, user)}\n"
+            + ("" if known else "  (SSH 포트가 22가 아니면 -p <포트>를 붙인다)\n")
+            + f"  터널 끄기: pkill -f \"{port}:127.0.0.1:{port}\"")
 
 
 def cmd_web(args) -> int:
@@ -420,9 +422,14 @@ def cmd_stop(args) -> int:
     pid = int(pf.read_text().strip() or 0)
     try:
         os.kill(pid, signal.SIGTERM)
-        print(f"서버 종료: pid {pid}")
+        # 프로세스가 끝나 포트를 놓을 때까지 기다린다. 바로 다시 켜거나 같은 포트로 재설치할 때 필요하다.
+        for _ in range(50):
+            time.sleep(0.1)
+            os.kill(pid, 0)
+        print(f"서버가 5초 안에 끝나지 않음: pid {pid}", file=sys.stderr)
+        return 1
     except ProcessLookupError:
-        print("이미 종료됨")
+        print(f"서버 종료: pid {pid}")
     pf.unlink(missing_ok=True)
     return 0
 

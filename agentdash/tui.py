@@ -29,6 +29,26 @@ AGENTS = [("all", "전체"), ("claude", "Claude"), ("codex", "Codex")]
 LAYOUTS = [("grid", "세로형"), ("list", "가로형")]
 FILTERS = [("all", "전체"), ("wait", "대기"), ("running", "실행 중"), ("idle", "입력 차례")]
 SPIN = "◐◓◑◒"
+# 화면 아래 키 막대. 자주 쓰는 순서로 둔다.
+KEY_BAR = [("a", "세션 관리"), ("x", "해제"), ("Enter", "펼치기"), ("c", "재개 명령 복사"), ("r", "새로고침"),
+           ("s", "정렬"), ("[ ]", "옮기기"), ("v", "세로/가로"), ("f", "상태 필터"), ("g", "Claude/Codex"),
+           ("←↑→↓", "이동"), ("?", "도움말"), ("q", "종료")]
+# ? 도움말 창
+HELP = [
+    ("←↑→↓, h j k l", "카드 선택 이동"),
+    ("Enter, Space", "선택한 카드 펼치기, 접기 (계획 단계, 요약, 경로, 토큰, 이력)"),
+    ("a", "세션 관리: 세션 등록과 해제 (Enter 등록/해제, Esc 닫기)"),
+    ("x", "선택한 세션 트래킹 해제 (확인 창에서 y 확인, n 취소)"),
+    ("c", "선택한 세션의 이어서 작업하기 명령 복사"),
+    ("r", "지금 바로 다시 읽기 (평소에는 2초마다 자동으로 갱신)"),
+    ("s", "정렬 바꾸기: 최근 실행순, 이름순, 에이전트별, 직접 배치"),
+    ("[ ]", "선택한 카드를 앞, 뒤로 옮기기 (직접 배치로 바뀜)"),
+    ("v", "세로형, 가로형 보기 바꾸기"),
+    ("f", "상태 필터: 전체, 대기, 실행 중, 입력 차례"),
+    ("g", "에이전트 필터: 전체, Claude, Codex"),
+    ("?", "이 도움말"),
+    ("q", "종료"),
+]
 
 
 # ---------- 글자 폭 ----------
@@ -120,6 +140,8 @@ def init_colors() -> None:
         "idle_a": (37 if rich else curses.COLOR_CYAN, bg),
         "idle_b": (179 if rich else curses.COLOR_YELLOW, bg),
         "modal": (231 if rich else curses.COLOR_WHITE, 238 if rich else curses.COLOR_BLUE),
+        "headline": (231 if rich else curses.COLOR_WHITE, 61 if rich else curses.COLOR_BLUE),
+        "keycap": (17 if rich else curses.COLOR_BLACK, 153 if rich else curses.COLOR_CYAN),
     }
     for i, (name, (fg, b)) in enumerate(spec.items(), start=1):
         try:
@@ -186,7 +208,15 @@ def mux_text(proc) -> str:
 def left_lines(s: dict, w: int, tick: int, host: dict | None = None) -> list:
     dim = col("gray")
     sym, sattr = light(s["status"], tick)
-    out = []
+    # 맨 위: 세션 제목을 바탕색으로 강조한다. 제목이 없으면 작업 폴더 이름을 쓴다.
+    title = cut(s.get("title") or display_name(s.get("workspace")) or "제목 없음", w - 2)
+    out = [[(" " + title + " " * max(0, w - 1 - width(title)), col("headline") | curses.A_BOLD)]]
+    # 바로 아래: 진행률
+    if s.get("progress") is not None:
+        pct = f" {round(s['progress'] * 100)}%"
+        out.append(bar(s["progress"], w - len(pct)) + [(pct, curses.A_BOLD)])
+    else:
+        out.append([("진행률 없음 (계획 단계를 쓰지 않은 세션)", dim)])
     if host:
         out.append([("서버 ", dim), (cut(host.get("ip") or host.get("name") or "", w - 5), curses.A_BOLD),
                     (cut(f"  {host['name']}" if host.get("ip") and host.get("name") else "", max(0, w - 21)), dim)])
@@ -194,7 +224,6 @@ def left_lines(s: dict, w: int, tick: int, host: dict | None = None) -> list:
         [(f"세션 시작 : {fmt_date(s.get('started'))}", dim)],
         [(f"마지막 실행 : {fmt_date(s.get('last_activity'))}", dim)],
         [(sym + " ", sattr), (cut(display_name(s.get("workspace")), w - 2), curses.A_BOLD)],
-        [(cut(s.get("title") or "", w), dim)],
     ]
     st = [(cut(s.get("status_label") or "", w), col(STATUS_COLOR.get(s["status"], "gray")) | curses.A_BOLD)]
     out.append(st)
@@ -209,9 +238,6 @@ def left_lines(s: dict, w: int, tick: int, host: dict | None = None) -> list:
         extra.append(mt)
     if extra:
         out.append([(cut("  ".join(extra), w), col("violet"))])
-    if s.get("progress") is not None:
-        pct = f" {round(s['progress'] * 100)}%"
-        out.append(bar(s["progress"], w - len(pct)) + [(pct, curses.A_BOLD)])
     t = s.get("tokens") or {}
     nodes = s.get("nodes") or []
     kids = [n for n in nodes if n["id"] != "main"]
@@ -224,7 +250,30 @@ def left_lines(s: dict, w: int, tick: int, host: dict | None = None) -> list:
     return out
 
 
-def right_lines(s: dict, w: int, tick: int, expanded: bool, max_kids: int = 8) -> list:
+def resume_lines(s: dict, w: int, full: bool) -> list:
+    """이어서 작업하기 명령. full이면 줄을 나눠 전체를, 아니면 한 줄로 줄여 보여준다."""
+    cmd = s.get("resume") or ""
+    if not cmd:
+        return []
+    out = [[("이어서 작업하기", curses.A_BOLD), ("  c 복사" if full else "  선택하면 전체 표시, c 복사", col("gray"))]]
+    if not full:
+        piece = cut(cmd, w - 2)
+        return out + [[(" " + piece + " " * max(0, w - 1 - width(piece)), col("resume"))]]
+    while cmd:
+        piece, n = "", 0
+        for ch in cmd:
+            if n + cw(ch) > w - 2:
+                break
+            piece += ch
+            n += cw(ch)
+        cmd = cmd[len(piece):]
+        out.append([(" " + piece + " " * (w - 1 - width(piece)), col("resume"))])
+    if s.get("resume_note"):
+        out.append([(cut(s["resume_note"], w), col("amber"))])
+    return out
+
+
+def right_lines(s: dict, w: int, tick: int, expanded: bool, max_kids: int = 8, selected: bool = False) -> list:
     dim = col("gray")
     nodes = s.get("nodes") or []
     main = next((n for n in nodes if n["id"] == "main"), nodes[0] if nodes else {})
@@ -277,6 +326,8 @@ def right_lines(s: dict, w: int, tick: int, expanded: bool, max_kids: int = 8) -
                     (" " * max(0, room - width(body)), 0), (tail, dim)])
     if len(rows) > max_kids:
         out.append([(f"  하위 {len(rows) - max_kids}개 더 (Enter로 펼치기)", dim)])
+    out.append([("", 0)])
+    out += resume_lines(s, w, full=selected or expanded)
     if expanded:
         out.append([("", 0)])
         if steps:
@@ -287,19 +338,6 @@ def right_lines(s: dict, w: int, tick: int, expanded: bool, max_kids: int = 8) -
         if s.get("summary"):
             out.append([("요약", curses.A_BOLD)])
             out.append([(cut(s["summary"], w), dim)])
-        out.append([("이어서 작업하기 (c로 복사)", curses.A_BOLD)])
-        cmd = s.get("resume") or ""
-        while cmd:
-            piece, n = "", 0
-            for ch in cmd:
-                if n + cw(ch) > w - 2:
-                    break
-                piece += ch
-                n += cw(ch)
-            cmd = cmd[len(piece):]
-            out.append([(" " + piece + " " * (w - 1 - width(piece)), col("resume"))])
-        if s.get("resume_note"):
-            out.append([(cut(s["resume_note"], w), col("amber"))])
         out.append([("경로", curses.A_BOLD)])
         out.append([(cut(s.get("cwd") or "", w), dim)])
         t = s.get("tokens") or {}
@@ -331,6 +369,7 @@ class App:
         self.filter = "all"
         self.agent = p.get("agent", "all")
         self.boxes: list = []
+        self.wake = threading.Event()  # r 키로 바로 다시 읽을 때 쓴다
         self.app: dict = {}
         threading.Thread(target=self._check_updates, daemon=True).start()
         self.dump_path = os.environ.get("AGENTDASH_TUI_DUMP")  # 화면 확인용. 화면 글자를 이 파일에 쓴다.
@@ -360,7 +399,8 @@ class App:
                     self.snap = snap
             except Exception as e:  # 한 번 실패해도 화면은 계속 돈다
                 self.flash(f"갱신 오류: {type(e).__name__}: {e}")
-            time.sleep(REFRESH_SEC)
+            self.wake.wait(REFRESH_SEC)
+            self.wake.clear()
 
     def _check_updates(self) -> None:
         try:
@@ -398,10 +438,12 @@ class App:
         return items
 
     # ----- 그리기 -----
-    def put(self, y: int, x: int, segs: list, maxw: int) -> None:
+    def put(self, y: int, x: int, segs: list, maxw: int, last_row_ok: bool = False) -> None:
         h, W = self.scr.getmaxyx()
-        if y < 0 or y >= h - 1 or x >= W:
+        if y < 0 or y >= (h if last_row_ok else h - 1) or x >= W:
             return
+        if last_row_ok and y == h - 1:
+            maxw = min(maxw, W - 1 - x)  # 맨 아래 줄 마지막 칸에 쓰면 curses가 오류를 낸다
         used = 0
         for text, attr in segs:
             if used >= maxw:
@@ -429,7 +471,7 @@ class App:
             lw = LEFT_W
             rw = inner - lw - 3
             L = left_lines(s, lw, tick, self.snap.get("host"))
-            R = right_lines(s, rw, tick, expanded, max_kids=99 if expanded else 6)
+            R = right_lines(s, rw, tick, expanded, max_kids=99 if expanded else 6, selected=selected)
             n = max(len(L), len(R))
             body = []
             for i in range(n):
@@ -437,7 +479,7 @@ class App:
                 lwid = sum(width(t) for t, _ in left)
                 body.append(left + [(" " * max(0, lw - lwid), 0), (" │ ", col("gray") | curses.A_DIM)] + (R[i] if i < len(R) else []))
         else:
-            body = left_lines(s, inner, tick, self.snap.get("host")) + [[("", 0)]] + right_lines(s, inner, tick, expanded, max_kids=99 if expanded else 6)
+            body = left_lines(s, inner, tick, self.snap.get("host")) + [[("", 0)]] + right_lines(s, inner, tick, expanded, max_kids=99 if expanded else 6, selected=selected)
         h = len(body) + 2
         # 테두리 색. 선택한 카드는 굵게, 사용자 차례인 카드는 두 색을 천천히 오간다.
         if s["status"] == "idle":
@@ -491,14 +533,15 @@ class App:
         items = self.sessions()
         self.sel = min(self.sel, max(0, len(items) - 1))
         top = 5
-        view_h = H - top - 1
+        bar = self.key_bar(W)
+        view_h = H - top - len(bar) - 1
         # 행 단위로 배치한다. 가로형은 한 행에 카드 하나다.
         boxes = self.layout_boxes(items, W)
         cols = 1 if self.layout == "list" else max(1, (W - 1) // CARD_MIN)
         # 높이를 먼저 잰다 (화면 밖 좌표에 그려 높이만 얻는다)
         heights = []
         for s, c, w, x in boxes:
-            heights.append(self._measure(s, w, tick))
+            heights.append(self._measure(s, w, tick, len(heights) == self.sel))
         rows_y, y = [], 0
         for r in range(0, len(boxes), cols):
             rows_y.append(y)
@@ -521,23 +564,62 @@ class App:
                 continue
             self._draw_clipped(top + ry, x, w, s, i == self.sel, tick, top, top + view_h)
 
-        help_ = "←↑→↓ 이동  Enter 펼치기  x 해제  a 세션 관리  s 정렬  [ ] 옮기기  v 보기  f 필터  g 에이전트  c 복사  q 종료"
-        if self.app.get("update") and not (self.msg and time.time() < self.msg_until):
-            up = f"새 버전(v{self.app['latest']})이 나왔습니다. q로 나간 뒤 agent-dash update"
-            self.put(H - 2, max(0, (W - width(up)) // 2), [(up, col("blue") | curses.A_BOLD)], W)
+        # 아래쪽: 알림 한 줄(메시지 또는 새 버전 안내)과 키 막대
+        note_y = H - len(bar) - 1
         if self.msg and time.time() < self.msg_until:
-            self.put(H - 1, 0, [(cut(self.msg, W - 1), col("amber") | curses.A_BOLD)], W - 1)
-        else:
-            self.put(H - 1, 0, [(cut(help_, W - 1), col("gray"))], W - 1)
+            self.put(note_y, 1, [(cut(self.msg, W - 2), col("amber") | curses.A_BOLD)], W - 2)
+        elif self.app.get("update"):
+            up = f"새 버전(v{self.app['latest']})이 나왔습니다. q로 나간 뒤 agent-dash update"
+            self.put(note_y, max(0, (W - width(up)) // 2), [(up, col("blue") | curses.A_BOLD)], W)
+        for i, line in enumerate(bar):
+            self.put(H - len(bar) + i, 1, line, W - 2, last_row_ok=True)
         scr.refresh()
         if self.dump_path:
             Path(self.dump_path).write_text("\n".join("".join(r).rstrip() for r in self.shadow) + "\n")
 
-    def _measure(self, s, w, tick) -> int:
+    def key_bar(self, W: int) -> list:
+        """키 막대 줄 목록. 키는 색 상자로, 설명은 옆에 둔다. 너비가 모자라면 다음 줄로 넘긴다."""
+        lines, line, used = [], [], 0
+        for key, label in KEY_BAR:
+            item = [(f" {key} ", col("keycap") | curses.A_BOLD), (f" {label}", 0), ("   ", 0)]
+            n = sum(width(t) for t, _ in item)
+            if line and used + n > W - 2:
+                lines.append(line)
+                line, used = [], 0
+            line += item
+            used += n
+        if line:
+            lines.append(line)
+        return lines[:3]
+
+    def help_window(self) -> None:
+        H, W = self.scr.getmaxyx()
+        kw = max(width(k) for k, _ in HELP) + 2
+        w = min(W - 2, kw + max(width(d) for _, d in HELP) + 8)
+        h = min(H - 2, len(HELP) + 5)
+        win = curses.newwin(h, w, max(0, (H - h) // 2), max(0, (W - w) // 2))
+        win.bkgd(" ", col("modal"))
+        win.box()
+        try:
+            win.addstr(1, 3, "키 도움말", col("modal") | curses.A_BOLD)
+            for i, (k, d) in enumerate(HELP[: h - 5]):
+                win.addstr(3 + i, 3, k, col("modal") | curses.A_BOLD)
+                win.addstr(3 + i, 3 + kw, cut(d, w - kw - 6), col("modal"))
+            win.addstr(h - 2, max(1, w - 22), "아무 키나 누르면 닫기", col("modal") | curses.A_DIM)
+        except curses.error:
+            pass
+        win.refresh()
+        self.scr.timeout(-1)
+        try:
+            self.scr.getch()
+        finally:
+            self.scr.timeout(500)
+
+    def _measure(self, s, w, tick, selected: bool = False) -> int:
         saved = self.put
         self.put = lambda *a, **k: None
         try:
-            return self.card(0, 0, w, s, False, tick)
+            return self.card(0, 0, w, s, selected, tick)
         finally:
             self.put = saved
 
@@ -667,7 +749,12 @@ class App:
         cur = items[self.sel] if items and self.sel < len(items) else None
         if k in (ord("q"), ord("Q")):
             return False
-        if k in (curses.KEY_RIGHT, ord("l")):
+        if k == ord("r"):
+            self.wake.set()
+            self.flash("다시 읽는 중", 2)
+        elif k == ord("?"):
+            self.help_window()
+        elif k in (curses.KEY_RIGHT, ord("l")):
             self.sel = min(len(items) - 1, self.sel + 1) if items else 0
         elif k in (curses.KEY_LEFT, ord("h")):
             self.sel = max(0, self.sel - 1)

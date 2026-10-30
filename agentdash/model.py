@@ -104,6 +104,25 @@ def launch_of(agent: str, entry: str | None, source=None, headless: bool = False
     return "cli" if entry in ("codex-tui", "codex_exec", "codex_cli_rs") else "remote"
 
 
+def ssh_target() -> tuple[str | None, int | None]:
+    """로컬 PC에서 이 서버로 SSH 접속할 때 쓰는 주소와 포트.
+
+    SSH로 접속한 터미널이면 SSH_CONNECTION(클라이언트 IP, 포트, 서버 IP, 포트)에서 실제로 접속한 주소를 쓴다.
+    아니면 서버 IP를 쓰고 포트는 모른다(None).
+    """
+    parts = os.environ.get("SSH_CONNECTION", "").split()
+    if len(parts) == 4 and parts[3].isdigit():
+        return parts[2], int(parts[3])
+    h = host_info()
+    return h["ip"] or h["name"], None
+
+
+def tunnel_command(port: int, user: str) -> str:
+    host, sshp = ssh_target()
+    opt = f"-p {sshp} " if sshp and sshp != 22 else ""
+    return f"ssh -f -N {opt}-L {port}:127.0.0.1:{port} {user}@{host}"
+
+
 def load_config() -> dict:
     """설치 스크립트가 만든 설정. 없으면 빈 값이다 (개발용 실행)."""
     try:
@@ -453,10 +472,14 @@ class Registry:
             started, cwd = parse_ts(c.get("first_ts")), (c.get("cwd") or "").rstrip("/")
             if not started or not cwd:
                 continue
+            # 폴더가 가장 가까운 부모를 고르고, 같으면 가장 최근에 시작한 부모를 고른다.
+            # 상위 폴더에서 실행한 세션이 다른 작업의 하위 세션을 가져가지 않게 한다.
             best = None
             for key, pcwd, a, _ in windows:
-                if (cwd == pcwd or cwd.startswith(pcwd + "/")) and a <= started <= ends[key] and (best is None or a > best[1]):
-                    best = (key, a)
+                if (cwd == pcwd or cwd.startswith(pcwd + "/")) and a <= started <= ends[key]:
+                    rank = (len(pcwd), a)
+                    if best is None or rank > best[1]:
+                        best = (key, rank)
             if best:
                 out[c["key"]] = {**c, "parent": best[0]}
                 ends[best[0]] = max(ends[best[0]], (c.get("mtime") or started) + 120)

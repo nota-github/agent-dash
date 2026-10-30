@@ -323,6 +323,14 @@ class LaunchTest(unittest.TestCase):
         self.assertEqual(L("codex", "codex_exec"), "cli")
 
 
+class TunnelTest(unittest.TestCase):
+    def test_tunnel_uses_ssh_connection(self):
+        with mock.patch.dict(os.environ, {"SSH_CONNECTION": "192.0.2.1 50000 192.0.2.10 2222"}):
+            self.assertEqual(model.tunnel_command(24001, "alex"), "ssh -f -N -p 2222 -L 24001:127.0.0.1:24001 alex@192.0.2.10")
+        with mock.patch.dict(os.environ, {"SSH_CONNECTION": "192.0.2.1 50000 192.0.2.10 22"}):
+            self.assertEqual(model.tunnel_command(24001, "alex"), "ssh -f -N -L 24001:127.0.0.1:24001 alex@192.0.2.10")
+
+
 class UpdatesTest(unittest.TestCase):
     def test_version_compare_and_notice(self):
         from agentdash import updates
