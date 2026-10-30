@@ -1,160 +1,183 @@
 # agent-dash
 
-Claude Code, Codex 세션의 진행 상황을 한 화면에서 보는 개인용 대시보드
+English | [한국어](README_ko.md)
 
-- 웹 화면과 터미널 화면(TUI) 제공
-- 여러 작업을 동시에 실행할 때 세션별 진행 상황 확인용
+A personal dashboard that shows the progress of your Claude Code and Codex sessions on one screen
 
-## 화면
+- Web view and terminal view (TUI)
+- Built for running many agent tasks in parallel
 
-> 화면의 세션, 경로, 서버 주소는 모두 예시 값
+## Screenshots
 
-**웹 화면, 세로형**
+> All sessions, paths and server addresses in the screenshots are sample values. The UI is currently in Korean.
 
-![웹 화면, 세로형](docs/images/web-grid.png)
+**Web, grid view**
 
-**웹 화면, 가로형**
+![Web, grid view](docs/images/web-grid.png)
 
-![웹 화면, 가로형](docs/images/web-list.png)
+**Web, list view**
 
-**터미널 화면(TUI)**
+![Web, list view](docs/images/web-list.png)
 
-![터미널 화면](docs/images/tui.png)
+**Terminal view (TUI)**
 
-## 주요 기능
+![Terminal view](docs/images/tui.png)
 
-- **세션 카드**
-  - 진행률, 예상 남은 시간, 계획 단계
-  - 메인 에이전트, 서브 에이전트, 하위 세션(`claude -p`, `codex exec`)
-  - 토큰 사용량, 컨텍스트 사용률
-  - 다음 날 이어서 작업할 재개 명령
-- **상태 표시**
-  - 실행 중, 사용자 대기, 입력(승인) 차례, 정체, 백그라운드 실행
-  - 입력 차례인 카드는 바탕 움직임으로 강조
-- **실행 환경 표시**
-  - 실행 방식: remote(앱이 SSH로 연결), cli(서버 터미널에서 실행)
-  - 실행 서버 IP
-  - 멀티플렉서: tmux, zellij, screen, cmux, herdr
-- **보기**
-  - 정렬: 최근 실행순, 이름순, 에이전트별, 직접 배치
-  - 카드 끌어서 옮기기
-  - Claude, Codex 필터
-  - 세로형, 가로형
+## Features
 
-## 수집 원칙
+- **Session cards**
+  - Progress, estimated time left, plan steps
+  - Main agent, subagents, child sessions (`claude -p`, `codex exec`)
+  - Token usage, context usage
+  - Resume command to pick up the work the next day
+- **Status**
+  - Running, waiting for user, user's turn to reply or approve, stalled, running in background
+  - Cards waiting for your reply get a slowly moving background
+- **Where it runs**
+  - Launch mode: remote (an app connected over SSH) or cli (started in a terminal on the server)
+  - Server IP
+  - Terminal multiplexer: tmux, zellij, screen, cmux, herdr
+- **Views**
+  - Sort: recent activity, name, agent, custom order
+  - Drag cards to reorder
+  - Filter by Claude or Codex
+  - Grid or list layout
 
-- Claude, Codex가 남기는 기록 파일을 읽기만 함
-- 훅, 플러그인, 스킬 설치 없음. 추가 토큰 사용 없음
-- 등록한 세션만 읽음
-- 사용자 입력(요청, 답변, 거부 사유)은 수집, 저장, 표시하지 않음
-- 화면에는 Claude, Codex가 만든 제목과 요약만 표시
-- 웹 서버는 `127.0.0.1`에만 열림
+## Data handling
 
-## 설치
+- Only reads the log files Claude and Codex already write
+- No hooks, plugins or skills installed. No extra tokens used
+- Reads only the sessions you track
+- Never collects, stores or shows what you type (requests, answers, rejection reasons)
+- Shows only the titles and summaries that Claude or Codex generated
+- The web server listens on `127.0.0.1` only
+
+## Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/nota-github/agent-dash/main/install.sh | sh
 ```
 
-- 에이전트를 실행하는 서버에서 실행
-- 필요 조건: Python 3.9 이상 (다른 패키지 불필요)
-- 설치 중 선택
-  - 화면: 웹, 터미널(TUI), 둘 다
-  - 웹 포트: 24000~25000에서 빈 포트 자동 선택. 없으면 직접 입력
-- 설치 위치
-  - 코드: `~/.local/share/agent-dash`
-  - 실행 파일: `~/.local/bin/agent-dash`
-  - 설정, 등록 목록: `~/.agentdash`
-- 셸 설정 파일은 바꾸지 않음. `~/.local/bin`이 PATH에 없으면 추가 방법 안내
-- 질문 없이 설치
+- Run it on the server where your agents run
+- Requires Python 3.9 or later (no other packages)
+- Operating systems
+  - Linux: supported and tested
+  - macOS: expected to work but not tested yet. Process and multiplexer info is not shown
+  - Windows: not supported (WSL not tested)
+- The installer asks for
+  - View: web, terminal (TUI), or both
+  - Web port: picks a free port in 24000-25000 automatically; asks you if none is free
+- Install locations
+  - Code: `~/.local/share/agent-dash`
+  - Command: `~/.local/bin/agent-dash`
+  - Settings and tracked sessions: `~/.agentdash`
+- Does not edit shell startup files. If `~/.local/bin` is not on your PATH, it shows how to add it
+- Non-interactive install
 
   ```bash
   curl -fsSL https://raw.githubusercontent.com/nota-github/agent-dash/main/install.sh | AGENT_DASH_MODE=both AGENT_DASH_PORT=24500 sh
   ```
 
-## 지원 사용 방식
+- Korean installer messages: use `install_ko.sh` instead of `install.sh`. The language is kept for updates
 
-| 방식 | 지원 | 설치 위치와 접속 |
+## Supported setups
+
+| Setup | Support | Where to install, how to connect |
 |---|---|---|
-| 1. 로컬 PC에서 Claude, Codex 앱 직접 실행 | 다음 버전 (Mac) | |
-| 2. 로컬 앱을 원격 서버에 SSH로 연결해 실행 | 지원 | 원격 서버에 설치. 웹은 SSH 터널로 접속 |
-| 3. 원격 서버에 SSH로 접속해 CLI로 실행 | 지원 | 원격 서버에 설치. 웹은 SSH 터널, TUI는 SSH 터미널에서 |
+| 1. Claude or Codex apps on your local PC | Next version (Mac) | |
+| 2. Local apps connected to a remote server over SSH | Yes | Install on the server. Open the web view through an SSH tunnel |
+| 3. CLI over SSH on a remote server | Yes | Install on the server. Web view through an SSH tunnel, TUI in the SSH session |
 
-## 세션 등록
+## Tracking sessions
 
-- 설치 직후에는 표시되는 세션 없음
-- 볼 세션을 직접 등록해야 하며, 등록한 세션만 읽음
+- Nothing is shown right after install
+- Track the sessions you want to see. Only tracked sessions are read
 
-| 방법 | 등록 | 해제 |
+| How | Track | Untrack |
 |---|---|---|
-| 웹 화면 | 오른쪽 위 "설정 > 세션 관리"에서 "등록" | 카드 오른쪽 위 x, 또는 세션 관리의 "등록됨" |
-| 터미널 화면 | `a`(세션 관리)에서 세션 선택 후 `Enter` | 카드 선택 후 `x`, 또는 세션 관리에서 `Enter` |
-| 명령 | `agent-dash track <세션 ID 앞부분>` | `agent-dash untrack <세션 ID 앞부분>` |
+| Web view | Top right 설정 > 세션 관리, then 등록 next to a session | x at the top right of a card, or 등록됨 in 세션 관리 |
+| Terminal view | `a` (session list), pick a session, `Enter` | Select a card and press `x`, or `Enter` in the session list |
+| Command | `agent-dash track <session ID prefix>` | `agent-dash untrack <session ID prefix>` |
 
 ```bash
-agent-dash sessions                 # 최근 세션 목록과 ID (* 등록됨)
-agent-dash track 3b71ac63           # 세션 ID 앞부분으로 등록
-agent-dash track --dir ~/work/api   # 이 폴더 아래 세션을 앞으로 생기는 것까지 모두 등록
+agent-dash sessions                 # recent sessions and their IDs (* = tracked)
+agent-dash track 3b71ac63           # track by session ID prefix
+agent-dash track --dir ~/work/api   # track every session under this folder, including future ones
 ```
 
-- 서브 에이전트와 하위 세션(`claude -p`, `codex exec`)은 따로 등록하지 않아도 부모 카드 안에 표시
-- 해제한 세션은 세션 관리 목록 맨 위 "최근 해제한 세션"에서 다시 등록 가능
-- 등록 목록은 웹 화면과 터미널 화면이 함께 사용
+- Subagents and child sessions (`claude -p`, `codex exec`) appear inside the parent card without tracking them
+- Untracked sessions stay at the top of the session list, so you can track them again
+- The web view and the terminal view share the same tracked list
 
-## 사용법
+## Usage
 
 ```bash
-agent-dash start      # 웹 서버 켜기 (백그라운드)
-agent-dash stop       # 웹 서버 끄기
-agent-dash restart    # 웹 서버 다시 켜기
-agent-dash status     # 설치 정보, 웹 서버 상태, 포트, 등록 세션 수
-agent-dash tui        # 터미널 화면 (q 종료, ? 키 도움말)
+agent-dash start      # start the web server (background)
+agent-dash stop       # stop the web server
+agent-dash restart    # restart the web server
+agent-dash status     # install info, web server state, port, tracked sessions
+agent-dash tui        # terminal view (q quit, ? key help)
 ```
 
-- tmux, zellij 안에서 실행할 필요 없음
-  - 웹 서버는 백그라운드로 실행되어 SSH 연결을 끊어도 유지
-  - 서버 재부팅 후에는 `agent-dash start` 다시 실행
-- 원격 서버의 웹 화면 접속
-  - 로컬 PC에서 SSH 터널 연결 후 브라우저로 `http://localhost:<포트>` 접속
-  - 터널 명령은 `agent-dash start` 실행 시 사용자, 주소, SSH 포트를 채워 안내
+- No need to run it inside tmux or zellij
+  - The web server runs in the background and keeps running after you close SSH
+  - After the server reboots, run `agent-dash start` again
+- Opening the web view on a remote server
+  - Open an SSH tunnel from your PC, then browse to `http://localhost:<port>`
+  - `agent-dash start` prints the tunnel command with your user, address and SSH port filled in
 
     ```bash
-    ssh -f -N -L <포트>:127.0.0.1:<포트> <사용자>@<서버>
+    ssh -f -N -L <port>:127.0.0.1:<port> <user>@<server>
     ```
 
-  - `-f`: 터미널을 닫아도 터널 유지
-  - 끊겨도 자동으로 다시 연결하려면 `autossh -M 0 -f -N -L ...` 사용
-- 자세한 내용: [MANUAL.md](MANUAL.md)
+  - `-f`: the tunnel stays open after you close the terminal
+  - To reconnect automatically, use `autossh -M 0 -f -N -L ...`
+- More details (Korean): [MANUAL.md](MANUAL.md)
 
-## 업데이트
-
-```bash
-agent-dash update                  # 최신 버전으로 업데이트
-agent-dash update --mode both      # 화면 종류를 바꿀 때
-```
-
-- 화면 종류, 포트, 등록 목록 유지
-- 켜져 있던 웹 서버는 업데이트 후 다시 켬
-- 설치 명령(`curl ... | sh`)을 다시 실행해도 같음
-- 새 버전 안내
-  - `agent-dash` 명령 실행 시, 웹 화면과 터미널 화면 위쪽에 표시
-  - 하루 한 번 GitHub의 버전 파일만 내려받아 비교 (보내는 정보 없음)
-  - 끄기: `~/.agentdash/config.json`에 `"update_check": false`
-- 변경 내용: [CHANGELOG.md](CHANGELOG.md)
-
-## 삭제
+## Changing the port
 
 ```bash
-agent-dash uninstall                  # 설치 전 상태로 되돌림
-agent-dash uninstall --purge-backup   # 원복용 백업까지 삭제
+agent-dash status                                  # current port
+AGENT_DASH_PORT=24600 agent-dash update --force    # reinstall with port 24600
 ```
 
-- 설치한 모든 파일을 설치 기록에 남기고, 삭제 시 기록을 거꾸로 따라 되돌림
-- `~/.local/bin`처럼 다른 프로그램과 함께 쓰는 폴더는 비어 있을 때만 삭제
+- Reinstalls the same version on the new port. Tracked sessions and other settings are kept
+- A running web server is restarted on the new port
+- Reopen the SSH tunnel on your PC with the new port
+  - Close the old tunnel: `pkill -f "<old port>:127.0.0.1:<old port>"`
+  - `agent-dash start` prints the new tunnel command
+- If the port is in use, the installer stops and tells you. Run again with another number
+- Use a number from 1024 to 65535 that no other program uses
 
-## 개발
+## Update
+
+```bash
+agent-dash update                  # update to the latest version
+agent-dash update --mode both      # change the view type
+```
+
+- Keeps your view type, port, language and tracked sessions
+- A running web server is restarted after the update
+- Running the install command (`curl ... | sh`) again does the same
+- New version notice
+  - Shown when you run `agent-dash`, and at the top of the web and terminal views
+  - Checks once a day by downloading one version file from GitHub (nothing is sent)
+  - To turn it off: add `"update_check": false` to `~/.agentdash/config.json`
+- Changes: [CHANGELOG.md](CHANGELOG.md)
+
+## Uninstall
+
+```bash
+agent-dash uninstall                  # restore the state before install
+agent-dash uninstall --purge-backup   # also delete the rollback backup
+```
+
+- Every installed file is recorded; uninstall follows the record in reverse
+- Shared folders such as `~/.local/bin` are removed only if empty
+
+## Development
 
 ```bash
 python3 -m unittest discover -s tests
-./install.sh          # 저장소 안에서 실행하면 이 폴더의 코드로 설치
+./install.sh          # from a clone, installs the code in this folder
 ```

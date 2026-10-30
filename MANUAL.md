@@ -30,8 +30,10 @@ agent-dash는 Claude Code와 Codex 세션의 진행 상황을 웹 화면과 터�
 ## 2. 설치
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nota-github/agent-dash/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/nota-github/agent-dash/main/install_ko.sh | sh
 ```
+
+`install_ko.sh`는 안내 문구가 한국어이고, `install.sh`는 영어입니다. 설치 과정은 같고, 고른 언어는 설정(`lang`)에 남아 업데이트할 때도 그대로 씁니다.
 
 1. 설치할 화면을 고릅니다. 1) 웹 화면, 2) 터미널 화면, 3) 둘 다.
 2. 웹 화면을 고르면 24000~25000 대역에서 비어 있는 포트를 자동으로 찾습니다. 같은 서버를 여러 사람이 쓰면 사용자마다 다른 위치에서 찾기 시작하므로 겹칠 가능성이 낮습니다. 비어 있는 포트가 없으면 직접 입력을 받습니다.
@@ -42,6 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/nota-github/agent-dash/main/install
 | `AGENT_DASH_MODE` | `web`, `tui`, `both`. 주면 화면을 묻지 않습니다 |
 | `AGENT_DASH_PORT` | 웹 포트. 주면 포트를 찾지 않습니다 |
 | `AGENT_DASH_READ_ROOT` | `1`이면 root 계정 기록 읽기를 켭니다(`read_root`) |
+| `AGENT_DASH_LANG` | `en` 또는 `ko`. 설치 안내 언어 |
 | `AGENT_DASH_REPO`, `AGENT_DASH_REF` | 내려받을 저장소(`owner/repo`)와 브랜치 |
 | `AGENT_DASH_SRC` | 내려받지 않고 이 폴더의 코드를 설치합니다 |
 

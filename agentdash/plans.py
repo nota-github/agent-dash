@@ -14,7 +14,7 @@ CORE = ["claude.py", "cli.py", "codex.py", "ledger.py", "model.py", "plan.py",
         "plans.py", "procs.py", "sources.py", "updates.py", "version.py"]
 WEB = ["server.py", "web/index.html"]
 TUI = ["tui.py"]
-DOCS = ["README.md", "MANUAL.md", "CHANGELOG.md", "uninstall.sh"]
+DOCS = ["README.md", "README_ko.md", "MANUAL.md", "CHANGELOG.md", "uninstall.sh"]
 MODES = ("web", "tui", "both")
 
 
@@ -23,17 +23,18 @@ def base(home: Path, **_) -> list[dict]:
     return [{"id": "base/dir", "op": "mkdir", "path": str(home / ".agentdash"), "mode": 0o755}]
 
 
-def config(home: Path, mode: str = "both", port: int | None = None, read_root: bool = False, **_) -> list[dict]:
+def config(home: Path, mode: str = "both", port: int | None = None, read_root: bool = False,
+           lang: str | None = None, **_) -> list[dict]:
     """설정 파일. 저장소에서 바로 실행하는 개발 환경도 이 계획으로 포트를 정한다."""
     if mode not in MODES:
         raise SystemExit(f"--mode는 {', '.join(MODES)} 중 하나여야 함")
-    cfg = {"mode": mode, "port": port, "read_root": bool(read_root)}
+    cfg = {"mode": mode, "port": port, "read_root": bool(read_root), "lang": lang if lang in ("en", "ko") else "en"}
     return base(home) + [{"id": "app/config", "op": "write_file", "path": str(home / ".agentdash" / "config.json"),
                           "content": json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", "mode": 0o644}]
 
 
 def app(home: Path, src: str | None = None, mode: str = "both", port: int | None = None,
-        read_root: bool = False, python: str = "python3", **_) -> list[dict]:
+        read_root: bool = False, lang: str | None = None, python: str = "python3", **_) -> list[dict]:
     """코드, 설정, 실행 파일(~/.local/bin/agent-dash). 원본 폴더(src)의 파일을 그대로 복사한다."""
     if not src:
         raise SystemExit("app 계획에는 --src가 필요함")
@@ -53,7 +54,7 @@ def app(home: Path, src: str | None = None, mode: str = "both", port: int | None
         if f.exists():
             acts.append({"id": f"app/doc/{n}", "op": "write_file", "path": str(dest / n),
                          "content": f.read_text(encoding="utf-8"), "mode": 0o755 if n.endswith(".sh") else 0o644})
-    acts += config(home, mode=mode, port=port, read_root=read_root)[1:]
+    acts += config(home, mode=mode, port=port, read_root=read_root, lang=lang)[1:]
     acts.append({"id": "app/bin-dir", "op": "mkdir", "path": str(home / ".local" / "bin"), "mode": 0o755})
     launcher = ("#!/bin/sh\n"
                 "# agent-dash 실행 파일. 설치 스크립트가 만들었다. 지우려면: agent-dash uninstall\n"

@@ -37,7 +37,7 @@ def confirm(prompt: str, yes: bool) -> bool:
 def cmd_install(args) -> int:
     lg = make_ledger(args)
     actions = plans.build(args.plans, lg.home, src=args.src, mode=args.mode, port=args.port,
-                          read_root=args.read_root, python=sys.executable)
+                          read_root=args.read_root, lang=args.lang, python=sys.executable)
     print(f"대상 홈: {lg.home}")
     print(f"백업 위치: {lg.target_dir}")
     if args.dry_run:
@@ -371,6 +371,7 @@ def cmd_update(args) -> int:
     cfg = _config()
     env = dict(os.environ)
     env["AGENT_DASH_MODE"] = args.mode or cfg.get("mode") or "both"
+    env.setdefault("AGENT_DASH_LANG", cfg.get("lang") or "en")
     if cfg.get("port") and not os.environ.get("AGENT_DASH_PORT"):
         env["AGENT_DASH_PORT"] = str(cfg["port"])
     print(f"최신 버전으로 다시 설치함: {INSTALL_URL}")
@@ -449,6 +450,7 @@ def main(argv=None) -> int:
     s.add_argument("--mode", default="both", help="app 계획: web, tui, both")
     s.add_argument("--port", type=int, help="app, config 계획: 웹 서버 포트")
     s.add_argument("--read-root", action="store_true", help="app, config 계획: root 계정 기록도 읽기 (sudo -n 필요)")
+    s.add_argument("--lang", choices=["en", "ko"], help="app, config 계획: 설치 안내 언어")
     s.set_defaults(fn=cmd_install)
 
     s = sub.add_parser("uninstall", help="설치 전 상태로 되돌린다")

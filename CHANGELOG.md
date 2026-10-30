@@ -1,5 +1,16 @@
 # 변경 기록
 
+## v0.1.3 (2026-10-30)
+
+- 설치 안내를 영어로 바꿨습니다. 한국어 안내는 `install_ko.sh`로 설치합니다.
+
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/nota-github/agent-dash/main/install_ko.sh | sh
+  ```
+
+- 고른 언어를 설정(`lang`)에 저장하고, `agent-dash update`에서도 같은 언어로 안내합니다. v0.1.2 이전 설치는 한국어를 유지합니다.
+- README를 영어(`README.md`)와 한국어(`README_ko.md`)로 나눴고, 화면 이미지와 세션 등록, 포트 변경 방법을 추가했습니다.
+
 ## v0.1.2 (2026-10-30)
 
 ### 고친 점
