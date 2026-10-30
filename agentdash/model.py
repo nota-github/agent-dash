@@ -466,11 +466,24 @@ class Registry:
             out.append({"key": f"codex:{sid}", "agent": "codex", "source": "codex", "id": sid, "path": f.path,
                         "mtime": f.mtime, "user": self.src.local.user, **h})
         out.sort(key=lambda d: -d["mtime"])
+        parents = getattr(self, "child_parent", {})
+        kids: dict[str, int] = {}
         for d in out:
             d["tracked"] = self.tracked.matches(d["key"], d.get("cwd"))
             d["workspace"] = workspace_name(d.get("cwd"))
+            # 하위 세션(스크립트가 실행한 claude -p, codex exec)은 부모 세션에 묶어 목록에서 따로 늘어놓지 않는다
+            if d.get("entry") == "codex_exec":
+                d["kind"] = "codex exec"
+            elif d.get("headless"):
+                d["kind"] = "claude -p"
+            if d["key"] in parents:
+                d["parent"] = parents[d["key"]]
+                kids[d["parent"]] = kids.get(d["parent"], 0) + 1
             if d["key"] in keep:
                 d["untracked_rank"] = untracked.index(d["key"])
+        for d in out:
+            if kids.get(d["key"]):
+                d["children"] = kids[d["key"]]
         return out
 
     def refresh(self) -> bool:

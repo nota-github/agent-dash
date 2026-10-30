@@ -691,6 +691,7 @@ class App:
         self.flash("세션 목록을 읽는 중", 1)
         with self.reg.lock:
             items = self.reg.discover(days=7)
+        items = [c for c in items if not c.get("parent")]  # 하위 세션은 부모 줄에 개수로만 보여준다
         back = sorted([c for c in items if c.get("untracked_rank") is not None and not c["tracked"]], key=lambda c: c["untracked_rank"])
         rest = [c for c in items if c not in back and c["mtime"] >= time.time() - 7 * 86400]
         rows = [("grp", "최근 해제한 세션")] * bool(back) + [("c", c) for c in back] \
@@ -712,7 +713,9 @@ class App:
                     on = start + i == sel
                     mark = "[등록됨]" if c["tracked"] else "[ 등록 ]"
                     agent = "Codex " if c["agent"] == "codex" else "Claude"
-                    text = f" {mark} {agent} {display_name(c['workspace'])}  {c.get('title') or '제목 없음'}  ({c.get('launch') or ''}, {c['user']})"
+                    kind = f"[{c['kind']}] " if c.get("kind") else ""
+                    kids = f", 하위 세션 {c['children']}개" if c.get("children") else ""
+                    text = f" {mark} {agent} {kind}{display_name(c['workspace'])}  {c.get('title') or '제목 없음'}  ({c.get('launch') or ''}, {c['user']}{kids})"
                     attr = curses.A_REVERSE if on else 0
                     self.put(y, 2, [(cut(text, W - 4), attr | (col("blue") if c["tracked"] else 0))], W - 4)
                 self.scr.refresh()
