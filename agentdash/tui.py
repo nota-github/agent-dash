@@ -27,7 +27,7 @@ LEFT_W = 42  # 가로형에서 왼쪽 칸 너비
 SORTS = [("recent", "최근 실행순"), ("name", "이름순"), ("agent", "에이전트별"), ("custom", "직접 배치")]
 AGENTS = [("all", "전체"), ("claude", "Claude"), ("codex", "Codex")]
 LAYOUTS = [("grid", "세로형"), ("list", "가로형")]
-FILTERS = [("all", "전체"), ("wait", "대기"), ("running", "실행 중"), ("idle", "입력 차례"), ("done", "완료")]
+FILTERS = [("all", "전체"), ("wait", "선택/승인"), ("running", "실행 중"), ("idle", "입력 차례"), ("done", "완료")]
 SPIN = "◐◓◑◒"
 # 화면 아래 키 막대. 자주 쓰는 순서로 둔다.
 KEY_BAR = [("a", "세션 관리"), ("x", "해제"), ("d", "완료 표시"), ("m", "마지막 응답"), ("Enter", "펼치기"), ("c", "재개 명령 복사"), ("r", "새로고침"),
@@ -588,7 +588,7 @@ class App:
         sub = "내 에이전트 진행 현황" + (f"  v{self.app['current']}" if self.app.get("current") else "")
         self.put(1, max(0, (W - width(sub)) // 2), [(sub, col("gray"))], W)
         sm = self.snap.get("summary") or {}
-        info = (f"사용자 대기 {sm.get('waiting', 0)}   실행 중 {sm.get('running', 0)}   입력 차례 {sm.get('idle', 0)}   "
+        info = (f"선택/승인 필요 {sm.get('waiting', 0)}   실행 중 {sm.get('running', 0)}   입력 차례 {sm.get('idle', 0)}   "
                 f"오늘 토큰 {fmt_tok(sm.get('tokens_today'))}")
         self.put(2, max(0, (W - width(info)) // 2), [(info, curses.A_BOLD)], W)
         opts = (f"에이전트 {dict(AGENTS)[self.agent]}   필터 {dict(FILTERS)[self.filter]}   정렬 {dict(SORTS)[self.sort]}   보기 {dict(LAYOUTS)[self.layout]}")

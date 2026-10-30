@@ -412,7 +412,7 @@ function progColor(p) {
 const light = (st, label) => `<span class="light l-${st}" title="${esc(label || "")}"></span>`;
 
 const RING = {
-  running: ["var(--blue)", "작업 중"], needs_input: ["var(--amber)", "답 필요"], maybe_waiting: ["var(--amber)", "대기 추정"],
+  running: ["var(--blue)", "작업 중"], needs_input: ["var(--amber)", "선택/승인"], maybe_waiting: ["var(--amber)", "대기 추정"],
   stalled: ["var(--red)", "정체"], idle: ["var(--teal)", "입력 차례"], done: ["var(--green)", "완료"], unreadable: ["var(--gray)", "읽기 실패"],
 };
 const GLYPH = {
@@ -492,7 +492,7 @@ function visible(s) {
 function renderSummary() {
   const sm = state.summary;
   const tiles = [
-    ["wait", "사용자 대기", sm.waiting, `wait ${sm.waiting ? "has" : ""}`, light(sm.waiting ? "needs_input" : "idle")],
+    ["wait", "선택/승인 필요", sm.waiting, `wait ${sm.waiting ? "has" : ""}`, light(sm.waiting ? "needs_input" : "idle")],
     ["running", "실행 중", sm.running, "", light(sm.running ? "running" : "idle")],
     ["idle", "입력 차례", sm.idle, `idle ${sm.idle ? "has" : ""}`, light("idle")],
     ["all", "오늘 토큰", fmtTok(sm.tokens_today), "", icon("coins")],
@@ -500,7 +500,7 @@ function renderSummary() {
   $("summary").innerHTML = tiles.map(([f, k, v, c, ic]) =>
     `<div class="tile ${c} ${filter === f && f !== "all" ? "on" : ""}" data-f="${f}">${ic}<div><div class="k">${k}</div><div class="v">${v}</div></div></div>`).join("");
   $("summary").querySelectorAll(".tile").forEach((el) => el.onclick = () => { filter = el.dataset.f; render(); });
-  const fs = [["all", `전체 ${sm.tracked}`], ["wait", "대기"], ["running", "실행 중"], ["idle", "입력 차례"], ["done", "완료"], ["since", "어제 이후"]];
+  const fs = [["all", `전체 ${sm.tracked}`], ["wait", "선택/승인"], ["running", "실행 중"], ["idle", "입력 차례"], ["done", "완료"], ["since", "어제 이후"]];
   $("filters").innerHTML = fs.map(([f, l]) => `<button class="chip-btn ${filter === f ? "on" : ""}" data-f="${f}">${l}</button>`).join("");
   $("filters").querySelectorAll("button").forEach((el) => el.onclick = () => { filter = el.dataset.f; render(); });
 }
@@ -765,7 +765,7 @@ async function post(url, body) {
 
 function notifyChanges(prev, next) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const msgs = { needs_input: "사용자 입력을 기다립니다", maybe_waiting: "승인 대기 중일 수 있습니다", idle: "사용자가 입력(승인)할 차례입니다", stalled: "10분째 변화가 없습니다" };
+  const msgs = { needs_input: "선택이나 승인을 기다립니다", maybe_waiting: "승인 대기 중일 수 있습니다", idle: "사용자가 입력(승인)할 차례입니다", stalled: "10분째 변화가 없습니다" };
   for (const s of next.sessions) {
     const before = prev[s.key];
     if (before && before !== s.status && msgs[s.status] && !(before === "needs_input" && s.status === "maybe_waiting")) {

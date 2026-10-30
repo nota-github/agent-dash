@@ -27,7 +27,7 @@ PROC_SCAN_SEC = 10  # 프로세스 목록은 이 간격으로만 다시 읽는�
 BACKGROUND_MAX_SEC = 6 * 3600  # 완료 알림 없이 이보다 오래된 백그라운드 작업은 끝난 것으로 본다
 CONTEXT_WINDOW = {"claude-opus": 1_000_000, "claude-sonnet": 1_000_000, "claude-haiku": 200_000}
 STATUS_LABEL = {
-    "needs_input": "사용자 대기",
+    "needs_input": "선택/승인 필요",
     "maybe_waiting": "대기 추정",
     "running": "실행 중",
     "stalled": "정체",
@@ -371,6 +371,42 @@ class Sources:
 
 # ---------- 상태와 계산 ----------
 
+def app_states(home: Path = HOME) -> dict[str, dict]:
+    """Claude 앱(데스크톱, 대화형 CLI, 백그라운드 에이전트)이 남기는 세션 상태. {세션 ID: {status, since}}.
+
+    ~/.claude/sessions/<pid>.json의 status는 idle, busy, waiting이다. waiting은 객관식 질문이나 승인 창이
+    떠 있는 상태인데, 이때 질문 기록은 답을 고른 뒤에야 기록 파일에 쓰이므로 기록만으로는 알 수 없다.
+    프로세스가 살아 있는 파일만 쓴다.
+    """
+    out: dict[str, dict] = {}
+    for f in (home / ".claude" / "sessions").glob("*.json"):
+        try:
+            d = json.loads(f.read_text())
+            pid = int(d.get("pid") or f.stem)
+            os.kill(pid, 0)
+        except (OSError, ValueError, TypeError):
+            continue
+        sid, st = d.get("sessionId"), d.get("status")
+        if sid and st in ("idle", "busy", "waiting"):
+            ts = d.get("statusUpdatedAt") or d.get("updatedAt")
+            out[sid] = {"status": st, "since": ts / 1000 if isinstance(ts, (int, float)) else None}
+    return out
+
+
+def apply_app_state(status: str, since, detail, app: dict | None):
+    """기록으로 판단한 상태를 앱 상태로 바로잡는다. 앱 상태가 없으면 그대로 둔다."""
+    if not app:
+        return status, since, detail
+    st = app["status"]
+    if st == "waiting":
+        return "needs_input", app.get("since") or since, detail or "앱에서 선택이나 승인을 기다리는 중"
+    if st == "busy" and status in ("idle", "maybe_waiting"):
+        return "running", since, detail
+    if st == "idle" and status in ("running", "maybe_waiting", "stalled"):
+        return "idle", app.get("since") or since, None
+    return status, since, detail
+
+
 def claude_status(t, now: float, other_activity: float = 0.0, headless: bool = False) -> tuple[str, float | None, str | None]:
     """(상태, 그 상태가 시작된 시각, 설명). 헤드리스 세션은 승인 대기가 없으므로 결과를 기다리는 도구를 실행 중으로 본다."""
     last = parse_ts(t.last_ts) or 0
@@ -501,6 +537,7 @@ class Registry:
     _proc_info: dict = {}  # 테스트처럼 __init__ 없이 만든 경우의 기본값. 값은 통째로 바꾸기만 한다.
     _proc_at = 0.0
     _show_last_message = True
+    _app: dict = {}
 
     def __init__(self, tracked: Tracked | None = None, root: bool | None = None):
         if root is None:
@@ -663,6 +700,10 @@ class Registry:
                     children.setdefault(child_parent[key], []).append((key, s))
             self._scan_processes(now)
             self._show_last_message = load_config().get("show_last_message", True) is not False
+            try:
+                self._app = app_states()
+            except OSError:
+                self._app = {}
             for key, s in self.sessions.items():
                 if key in child_parent:
                     continue
@@ -735,6 +776,8 @@ class Registry:
         # 기록 시각은 응답 생성 시작 시각이라 늦게 쓰일 수 있다. 파일 수정 시각도 활동으로 본다.
         sub_activity = max(s.sub_mtime or 0, s.mtime or 0)
         status, since, detail = claude_status(s.main, now, sub_activity, s.headless)
+        if source == "claude":
+            status, since, detail = apply_app_state(status, since, detail, self._app.get(s.id))
         nodes = []
         child_prog: dict[str, list[float]] = {}
         main_tokens = s.main.tokens()

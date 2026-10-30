@@ -410,6 +410,26 @@ class FolderTest(unittest.TestCase):
         self.assertEqual(mf(W, {W: 141, W + "/ws/c": 93, W + "/repos/x": 77, W + "/repos": 72, W + "/repos/y": 79}), "/w/ws/c")
 
 
+class AppStateTest(unittest.TestCase):
+    def test_app_status_overrides_transcript(self):
+        f = model.apply_app_state
+        # 질문 창은 답하기 전까지 기록에 남지 않는다. 앱 상태 waiting으로 안다.
+        self.assertEqual(f("running", 1, None, {"status": "waiting", "since": 5})[:2], ("needs_input", 5))
+        self.assertEqual(f("maybe_waiting", 1, "Bash: x", {"status": "busy", "since": 5})[0], "running")
+        self.assertEqual(f("running", 1, None, {"status": "idle", "since": 5})[0], "idle")
+        self.assertEqual(f("stalled", 1, None, {"status": "busy", "since": 5})[0], "stalled")
+        self.assertEqual(f("idle", 1, None, None)[0], "idle")
+
+    def test_app_states_reads_live_processes_only(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / ".claude" / "sessions"
+            d.mkdir(parents=True)
+            (d / f"{os.getpid()}.json").write_text(json.dumps({"pid": os.getpid(), "sessionId": "s1", "status": "waiting", "statusUpdatedAt": 1700000000000}))
+            (d / "999999999.json").write_text(json.dumps({"pid": 999999999, "sessionId": "s2", "status": "busy"}))
+            st = model.app_states(Path(t))
+            self.assertEqual(st, {"s1": {"status": "waiting", "since": 1700000000.0}})
+
+
 class LaunchTest(unittest.TestCase):
     def test_launch_is_remote_or_cli(self):
         L = model.launch_of

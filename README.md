@@ -31,7 +31,7 @@ A personal dashboard that shows the progress of your Claude Code and Codex sessi
   - Token usage, context usage
   - Resume command to pick up the work the next day
 - **Status**
-  - Running, waiting for user, user's turn to reply or approve, stalled, running in background
+  - Running, needs your choice or approval (multiple-choice questions, approval prompts), your turn, stalled, running in background
   - Cards waiting for your reply get a slowly moving background
   - When it is your turn, the card shows the last paragraph of the agent's last reply. Click it (web) or press `m` (terminal) for the full text
   - The circle on a card shows status only; progress is a separate bar with percent, steps done and time left
