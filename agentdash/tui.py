@@ -27,7 +27,7 @@ LEFT_W = 42  # 가로형에서 왼쪽 칸 너비
 SORTS = [("recent", "최근 실행순"), ("name", "이름순"), ("agent", "에이전트별"), ("custom", "직접 배치")]
 AGENTS = [("all", "전체"), ("claude", "Claude"), ("codex", "Codex")]
 LAYOUTS = [("grid", "세로형"), ("list", "가로형")]
-FILTERS = [("all", "전체"), ("wait", "선택/승인"), ("running", "실행 중"), ("idle", "입력 차례"), ("done", "완료")]
+FILTERS = [("all", "전체"), ("wait", "선택/승인"), ("running", "실행 중"), ("idle", "입력 차례"), ("done", "완료 표시됨")]
 SPIN = "◐◓◑◒"
 # 화면 아래 키 막대. 자주 쓰는 순서로 둔다.
 KEY_BAR = [("a", "세션 관리"), ("x", "해제"), ("d", "완료 표시"), ("m", "마지막 응답"), ("Enter", "펼치기"), ("c", "재개 명령 복사"), ("r", "새로고침"),
@@ -39,7 +39,7 @@ HELP = [
     ("Enter, Space", "선택한 카드 펼치기, 접기 (계획 단계, 요약, 경로, 토큰, 이력)"),
     ("a", "세션 관리: 세션 등록과 해제 (Enter 등록/해제, Esc 닫기)"),
     ("x", "선택한 세션 트래킹 해제 (확인 창에서 y 확인, n 취소)"),
-    ("d", "선택한 세션을 완료로 표시, 다시 누르면 다시 열기 (새 활동이 생기면 자동으로 다시 열림)"),
+    ("d", "선택한 세션을 완료로 표시, 다시 누르면 다시 열기 (세션이 다시 진행되면 자동으로 원래 상태로)"),
     ("c", "선택한 세션의 이어서 작업하기 명령 복사"),
     ("m", "입력 차례인 세션의 에이전트 마지막 응답 전체 보기 (↑↓ 스크롤, 아무 키나 닫기)"),
     ("r", "지금 바로 다시 읽기 (평소에는 2초마다 자동으로 갱신)"),
@@ -252,7 +252,14 @@ def left_lines(s: dict, w: int, tick: int, host: dict | None = None) -> list:
         pct = f" {round(s['progress'] * 100)}%"
         out.append(bar(s["progress"], w - len(pct)) + [(pct, curses.A_BOLD)])
     else:
-        # 계획이 없으면 퍼센트 대신 활동량을 보여준다
+        ss = s.get("session_steps") or [0, 0]
+        if ss[1]:
+            # 지금 계획이 없으면 지난 계획까지의 세션 누적을 흐린 막대로 보여준다 (지금 턴의 진행률이 아님)
+            label = f" 세션 누적 {ss[0]}/{ss[1]}"
+            n = max(4, w - width(label))
+            k = round(ss[0] / ss[1] * n)
+            out.append([("█" * k, col("gray")), ("░" * (n - k), col("gray") | curses.A_DIM), (label, dim)])
+        # 계획이 없으면 퍼센트 대신 활동량도 보여준다
         a = s.get("activity") or {}
         bits = []
         if a.get("turn_started"):
@@ -263,10 +270,6 @@ def left_lines(s: dict, w: int, tick: int, host: dict | None = None) -> list:
         if s["status"] == "running" and a.get("recent_tools") is not None:
             bits.append(f"최근 10분 {a['recent_tools']}회")
         out.append([(cut(", ".join(bits) if bits else "계획 단계 없음", w), dim)])
-    ss = s.get("session_steps") or [0, 0]
-    shown = len((s.get("nodes") or [{}])[0].get("steps") or [])
-    if ss[1] and ss[1] != shown:
-        out.append([(cut(f"세션 누적 {ss[0]}/{ss[1]} 단계", w), dim)])
     if host:
         out.append([("서버 ", dim), (cut(host.get("ip") or host.get("name") or "", w - 5), curses.A_BOLD),
                     (cut(f"  {host['name']}" if host.get("ip") and host.get("name") else "", max(0, w - 21)), dim)])
@@ -276,16 +279,9 @@ def left_lines(s: dict, w: int, tick: int, host: dict | None = None) -> list:
         [(sym + " ", sattr), (cut(display_name(s.get("workspace")), w - 2), curses.A_BOLD)],
     ]
     st = [(cut(s.get("status_label") or "", w), col(STATUS_COLOR.get(s["status"], "gray")) | curses.A_BOLD)]
+    # 칸이 좁아 마지막 응답은 카드에 넣지 않는다. m 키로 전체를 본다.
     lm = s.get("last_message")
-    if lm and lm.get("text"):
-        # 에이전트 마지막 응답의 마지막 문단을 두 줄까지. 전체는 m 키
-        para = last_paragraph(lm["text"])
-        first, rest = split_width(para, w - 2)
-        out_msg = [[("▌", col("teal")), (" " + first, 0)]]
-        if rest:
-            out_msg.append([("▌", col("teal")), (" " + cut(rest, w - 2), 0)])
-    else:
-        out_msg = []
+    out_msg = [[("m 키: 에이전트 마지막 응답 보기", dim)]] if lm and lm.get("text") else []
     out.append(st)
     extra = []
     if s.get("eta"):
@@ -900,10 +896,16 @@ class App:
                     self.flash(str(e))
         elif k == ord("d") and cur:
             done = not (cur["status"] == "done" and cur.get("completed_at"))
+            if done and not self.confirm([
+                    "이 세션을 완료로 표시할까요?",
+                    "원래 하려던 목표를 이뤘다고 판단될 때 직접 완료로 표시합니다.",
+                    "d로 되돌리거나 세션이 다시 진행되면 자동으로 원래 상태로 돌아갑니다.",
+                    "", f"{cur.get('title') or ''}  ({display_name(cur.get('workspace'))})"]):
+                return True
             try:
                 self.reg.tracked.set_completed(cur["key"], done)
                 self.wake.set()
-                self.flash("완료로 표시했습니다. 새 활동이 생기면 다시 열립니다" if done else "다시 열었습니다")
+                self.flash("완료로 표시했습니다" if done else "다시 열었습니다")
             except RuntimeError as e:
                 self.flash(str(e))
         elif k == ord("a"):

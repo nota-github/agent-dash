@@ -430,6 +430,16 @@ class AppStateTest(unittest.TestCase):
             self.assertEqual(st, {"s1": {"status": "waiting", "since": 1700000000.0}})
 
 
+class BackgroundNoticeTest(unittest.TestCase):
+    def test_only_harness_notices_count(self):
+        from agentdash.claude import BG_RESULT_RE
+        self.assertTrue(BG_RESULT_RE.search("Command running in background with ID: b1. Output is being written to: /tmp/x"))
+        self.assertTrue(BG_RESULT_RE.search("partial output\nCommand did not complete within its 120s timeout and was moved to the background"))
+        self.assertTrue(BG_RESULT_RE.search("Async agent launched successfully."))
+        self.assertFalse(BG_RESULT_RE.search('22:BG_RESULT_RE = re.compile(r"running in background|moved to the background")'))
+        self.assertFalse(BG_RESULT_RE.search("the job keeps running in background on the server"))
+
+
 class LaunchTest(unittest.TestCase):
     def test_launch_is_remote_or_cli(self):
         L = model.launch_of

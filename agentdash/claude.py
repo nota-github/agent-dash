@@ -22,7 +22,10 @@ from agentdash.sources import LineReader, LocalFS
 USER_INPUT_TOOLS = {"AskUserQuestion", "ExitPlanMode"}
 # 사용자가 도구 실행을 거부하며 쓴 말이 tool_result에 들어간다. 이런 결과는 내용을 저장하지 않는다.
 # 백그라운드로 시작한 작업. 완료 알림(<task-notification>)이 오면 끝난 것으로 본다.
-BG_RESULT_RE = re.compile(r"running in background|moved to the background|launched in (the )?background|async agent", re.I)
+# 백그라운드로 넘어갔다는 하네스 안내. 줄 맨 앞에 오는 문구만 본다. 명령 출력에 같은 말이 섞여도 오인하지 않게 한다.
+BG_RESULT_RE = re.compile(
+    r"^(Command running in background|Command was moved to the background"
+    r"|Command did not complete within .{0,40}moved to the background|Async agent\b)", re.M)
 NOTIFY_RE = re.compile(r"<tool-use-id>([^<]+)</tool-use-id>.*?<status>([^<]+)</status>", re.S)
 USER_REJECT_RE = re.compile(r"user (doesn't|does not) want|user (rejected|denied|declined)|the user said|user's (feedback|response)", re.I)
 AGENT_TOOLS = {"Agent", "Task"}

@@ -116,6 +116,10 @@ def mux_of(pid: int, procs: dict[int, Proc]) -> tuple[str | None, str | None]:
     while p and p.pid not in seen and p.pid > 1:
         seen.add(p.pid)
         name = os.path.basename(p.argv[0]) if p.argv else ""
+        # Claude 데몬이 띄운 백그라운드 에이전트(claude agents)는 터미널 창에 붙어 있지 않다.
+        # 데몬을 띄운 창의 멀티플렉서까지 올라가면 잘못된 창을 가리키므로 여기서 멈춘다.
+        if "bg-pty-host" in p.argv or ("daemon" in p.argv[1:3] and name == "claude"):
+            return "claude 백그라운드", None
         for key, label in MUX_COMM:
             if p.comm.startswith(key) or name.startswith(key):
                 return label, _mux_session(label, p, pid)

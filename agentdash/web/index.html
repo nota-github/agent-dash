@@ -75,6 +75,16 @@ header .right { display: flex; justify-content: flex-end; align-items: center; g
 .bleft { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .btab { position: absolute; top: 0; left: 18px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px 7px; border-radius: 0 0 12px 12px; color: #fff; font-size: 12.5px; font-weight: 750; letter-spacing: .3px; box-shadow: 0 3px 8px rgba(31,36,48,.18); text-shadow: 0 1px 1px rgba(0,0,0,.12); }
 .btab svg { width: 14px; height: 14px; stroke-width: 2.2; }
+/* 카드 오른쪽 위 묶음: 완료 표시하기(또는 다시 열기)와 트래킹 해제 */
+.bactions { position: absolute; top: 8px; right: 10px; display: inline-flex; align-items: stretch; background: rgba(255,255,255,.8); border: 1px solid var(--line-2); border-radius: 999px; overflow: hidden; box-shadow: 0 1px 3px rgba(31,36,48,.06); }
+.bactions button { border: 0; border-radius: 0; background: transparent; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 650; padding: 4px 11px; line-height: 1.2; }
+.bactions svg { width: 13px; height: 13px; }
+.bactions .ba-done { color: var(--text-2); }
+.bactions .ba-done:hover { background: var(--green-bg); color: var(--green-tx); }
+.bactions .ba-done.reopen { color: var(--text-2); }
+.bactions .ba-done.reopen:hover { background: var(--gray-bg); }
+.bactions .ba-x { color: var(--text-3); padding: 4px 9px; border-left: 1px solid var(--line-2); }
+.bactions .ba-x:hover { background: var(--red-bg); color: var(--red-tx); }
 .bx { position: absolute; top: 8px; right: 10px; padding: 5px; line-height: 0; border: 0; border-radius: 8px; background: transparent; color: var(--text-3); }
 .bx:hover { background: var(--red-bg); color: var(--red-tx); }
 .host { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 650; color: var(--text-2); font-family: var(--mono); margin-top: -6px; }
@@ -242,6 +252,7 @@ header .right { display: flex; justify-content: flex-end; align-items: center; g
 .modal .mt { font-size: 15px; font-weight: 700; }
 .modal .md { font-size: 13px; color: var(--text-2); margin: 6px 0 16px; }
 .modal .mn { font-size: 12px; color: var(--text-3); margin: -8px 0 14px; word-break: break-all; }
+.modal .mlist { margin: -6px 0 14px; padding-left: 18px; font-size: 12.5px; color: var(--text-2); line-height: 1.6; }
 .modal .mb { display: flex; justify-content: flex-end; gap: 8px; }
 .menu-wrap { position: relative; }
 button.settings { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; background: linear-gradient(135deg, #6b54d6, #3b76e8); border-color: transparent; color: #fff; border-radius: 10px; padding: 6px 14px; box-shadow: 0 2px 8px rgba(59,118,232,.28); }
@@ -309,6 +320,14 @@ button.primary:hover { background: #343b4a; }
   <span>정렬</span><span class="seg-ctl" id="sort-ctl"><button data-sort="recent">최근 실행순</button><button data-sort="name">이름순</button><button data-sort="agent">에이전트별</button><button data-sort="custom">직접 배치</button></span>
 </div>
 <main class="boards" id="boards"></main>
+<div class="modal-wrap" id="done-modal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="mt">이 세션을 완료로 표시할까요?</div>
+    <div class="md">원래 하려던 목표를 이뤘다고 판단될 때 직접 완료로 표시합니다. "다시 열기"로 되돌리거나 세션이 다시 진행되면 자동으로 원래 상태로 돌아갑니다.</div>
+    <div class="mn" id="done-name"></div>
+    <div class="mb"><button id="done-cancel">취소</button><button class="primary" id="done-ok">확인</button></div>
+  </div>
+</div>
 <div class="modal-wrap" id="modal">
   <div class="modal" role="dialog" aria-modal="true">
     <div class="mt">이 세션 트래킹을 해제하시나요?</div>
@@ -353,6 +372,7 @@ const ICON = {
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>',
   term: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/>',
   check: '<path d="M5 12l5 5L20 7"/>',
+  reopen: '<path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v4h4"/>',
   server: '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
 };
 const icon = (n) => `<svg class="i" viewBox="0 0 24 24">${ICON[n]}</svg>`;
@@ -500,7 +520,7 @@ function renderSummary() {
   $("summary").innerHTML = tiles.map(([f, k, v, c, ic]) =>
     `<div class="tile ${c} ${filter === f && f !== "all" ? "on" : ""}" data-f="${f}">${ic}<div><div class="k">${k}</div><div class="v">${v}</div></div></div>`).join("");
   $("summary").querySelectorAll(".tile").forEach((el) => el.onclick = () => { filter = el.dataset.f; render(); });
-  const fs = [["all", `전체 ${sm.tracked}`], ["wait", "선택/승인"], ["running", "실행 중"], ["idle", "입력 차례"], ["done", "완료"], ["since", "어제 이후"]];
+  const fs = [["all", `전체 ${sm.tracked}`], ["wait", "선택/승인"], ["running", "실행 중"], ["idle", "입력 차례"], ["done", "완료 표시됨"], ["since", "어제 이후"]];
   $("filters").innerHTML = fs.map(([f, l]) => `<button class="chip-btn ${filter === f ? "on" : ""}" data-f="${f}">${l}</button>`).join("");
   $("filters").querySelectorAll("button").forEach((el) => el.onclick = () => { filter = el.dataset.f; render(); });
 }
@@ -541,7 +561,9 @@ function boardHtml(s) {
   const t = s.tokens || {};
   return `<section class="board st-${s.status} ${(s.alerts || []).some((a) => a.kind === "error") ? "alert" : ""} ${open ? "open-details" : ""}" data-key="${esc(s.key)}">
     <div class="btab ${s.agent}">${icon(s.agent === "codex" ? "term" : "spark")}${s.agent === "codex" ? "Codex" : "Claude"}${launchLabel(s) ? `<span class="ent">${esc(launchLabel(s))}</span>` : ""}</div>
-    <button class="bx" data-untrack="${esc(s.key)}" data-name="${esc((s.title || "") + "  (" + displayName(s.workspace) + ")")}" title="트래킹 해제">${icon("x")}</button>
+    <div class="bactions">${s.status === "done" && s.completed_at
+      ? `<button class="ba-done reopen" data-complete="${esc(s.key)}" data-done="0" title="완료 표시를 풀고 원래 상태로 되돌립니다">${icon("reopen")}다시 열기</button>`
+      : `<button class="ba-done" data-complete="${esc(s.key)}" data-done="1" data-name="${esc((s.title || "") + "  (" + displayName(s.workspace) + ")")}" title="원래 하려던 목표를 이뤘으면 직접 완료로 표시합니다">${icon("check")}완료 표시하기</button>`}<button class="ba-x" data-untrack="${esc(s.key)}" data-name="${esc((s.title || "") + "  (" + displayName(s.workspace) + ")")}" title="트래킹 해제">${icon("x")}</button></div>
     <div class="bleft">
     ${hostLine()}
     <div class="bhead">
@@ -582,9 +604,6 @@ function boardHtml(s) {
     <div class="bfoot">
       <button class="ghost more" data-more="${esc(s.key)}">${open ? "접기" : "자세히"} ${icon("chev")}</button>
       <span class="sp"></span>
-      ${s.status === "done" && s.completed_at
-        ? `<button class="ghost done-btn" data-complete="${esc(s.key)}" data-done="0" title="완료 표시를 풀고 다시 진행 중으로 봅니다">다시 열기</button>`
-        : `<button class="ghost done-btn" data-complete="${esc(s.key)}" data-done="1" title="본래 의도한 작업이 끝났으면 완료로 표시합니다. 이후 새 활동이 생기면 자동으로 다시 열립니다">${icon("check")} 완료로 표시</button>`}
       <button class="icon" data-copy="${esc(s.resume)}" title="재개 명령 복사">${icon("copy")}</button>
     </div>
   </section>`;
@@ -662,8 +681,12 @@ $("boards").addEventListener("click", async (ev) => {
     openMsg(t.dataset.msg);
   } else if (t.dataset.complete !== undefined) {
     ev.stopPropagation();
-    const r = await post("/api/complete", { key: t.dataset.complete, done: t.dataset.done === "1" });
-    if (r.ok) toast(t.dataset.done === "1" ? "완료로 표시했습니다. 새 활동이 생기면 다시 열립니다" : "다시 열었습니다");
+    if (t.dataset.done === "1") {
+      askDone(t.dataset.complete, t.dataset.name);  // 의미를 안내하고 확인을 받은 뒤 처리한다
+    } else {
+      const r = await post("/api/complete", { key: t.dataset.complete, done: false });
+      if (r.ok) toast("다시 열었습니다");
+    }
   } else if (t.dataset.untrack !== undefined) {
     ev.stopPropagation();
     askUntrack(t.dataset.untrack, t.dataset.name);
@@ -698,6 +721,21 @@ $("msg-copy").onclick = async () => {
 };
 
 let modalKey = null;
+let doneKey = null;
+function askDone(key, name) {
+  doneKey = key; $("done-name").textContent = name || key; $("done-modal").classList.add("open"); $("done-ok").focus();
+}
+function closeDone() { doneKey = null; $("done-modal").classList.remove("open"); }
+$("done-cancel").onclick = closeDone;
+$("done-modal").addEventListener("click", (ev) => { if (ev.target === $("done-modal")) closeDone(); });
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && doneKey) closeDone(); });
+$("done-ok").onclick = async () => {
+  const key = doneKey; closeDone();
+  if (!key) return;
+  const r = await post("/api/complete", { key, done: true });
+  if (r.ok) toast("완료로 표시했습니다");
+};
+
 function askUntrack(key, name) {
   modalKey = key; $("modal-name").textContent = name || key; $("modal").classList.add("open"); $("modal-ok").focus();
 }

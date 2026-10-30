@@ -752,7 +752,7 @@ class Registry:
                     pass
                 d["reopened_at"] = ts
                 continue
-            d.update(status="done", status_label=STATUS_LABEL["done"], eta=None, completed_at=ts, since=ts)
+            d.update(status="done", status_label="완료 표시됨", eta=None, completed_at=ts, since=ts)
 
     def _scan_processes(self, now: float) -> None:
         """세션을 실행 중인 프로세스와 멀티플렉서. 데스크톱 앱에서 연 Codex 세션은 앱 서버가 실행하므로 찾지 않는다."""
