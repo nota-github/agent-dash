@@ -196,6 +196,21 @@ class Tracked:
             self.data["dirs"] = [x for x in self.data["dirs"] if x != os.path.abspath(d)]
             self.save()
 
+    def replace(self, old: str, new: str) -> None:
+        """세션이 새 ID로 이어졌을 때 등록을 옮긴다. 사용자가 해제한 것이 아니므로 해제 목록에는 넣지 않는다."""
+        with self.lock:
+            self.load()
+            if old in self.data["sessions"]:
+                self.data["sessions"] = [new if k == old else k for k in self.data["sessions"]]
+                if new in self.data["sessions"][self.data["sessions"].index(new) + 1:]:
+                    self.data["sessions"].remove(new)
+            elif new not in self.data["sessions"]:
+                self.data["sessions"].append(new)
+            done = self.data["completed"].pop(old, None)
+            if done:
+                self.data["completed"][new] = done
+            self.save()
+
     def set_completed(self, key: str, done: bool) -> None:
         """사용자가 직접 완료로 표시한 세션. 표시한 뒤 새 활동이 생기면 snapshot에서 자동으로 푼다."""
         with self.lock:
@@ -516,10 +531,25 @@ class Registry:
                 if isinstance(s, CodexSession):
                     s.thread_name = titles.get(s.id)
                 changed |= s.poll()
+            self._follow_continuations(cands)
             if changed:
                 self.version += 1
             self.last_refresh = time.time()
             return changed
+
+    def _follow_continuations(self, cands: list[dict]) -> None:
+        """등록한 세션이 새 ID로 이어졌으면 등록을 새 세션으로 옮긴다. 다음 갱신부터 새 파일을 읽는다."""
+        known = {c["key"] for c in cands}
+        for key, s in list(self.sessions.items()):
+            nxt = isinstance(s, ClaudeSession) and s.main.meta.get("continued_in")
+            if not nxt or key not in self.tracked.data["sessions"]:
+                continue
+            new_key = key.split(":", 1)[0] + ":" + nxt
+            if new_key in known:
+                try:
+                    self.tracked.replace(key, new_key)
+                except RuntimeError:
+                    pass
 
     def _child_candidates(self) -> dict[str, dict]:
         """등록한 대화형 Claude 세션이 실행한 하위 세션.

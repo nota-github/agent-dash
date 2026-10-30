@@ -227,6 +227,8 @@ header .right { display: flex; justify-content: flex-end; align-items: center; g
 .panel { width: min(560px, 100%); height: 100%; background: #fff; padding: 18px; overflow-y: auto; box-shadow: -8px 0 24px rgba(31,36,48,.12); }
 .panel h2 { font-size: 16px; margin: 0; flex: 1; }
 .panel .hint { color: var(--text-2); font-size: 12.5px; margin: 6px 0 12px; }
+.panel details.auto { margin-top: 14px; }
+.panel details.auto summary { font-size: 12px; font-weight: 700; color: var(--text-3); cursor: pointer; }
 .panel .grp { font-size: 12px; font-weight: 700; color: var(--text-3); margin: 14px 0 2px; }
 .cand.recent { background: var(--amber-bg); border-radius: 10px; padding: 8px 10px; border-bottom: 0; margin-bottom: 4px; }
 .modal-wrap { position: fixed; inset: 0; background: rgba(31,36,48,.28); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
@@ -739,9 +741,13 @@ async function openPanel() {
   // 하위 세션은 부모 세션 줄에 개수로만 보여준다 (부모 카드 안에 이미 표시된다)
   items = items.filter((c) => !c.parent);
   const back = items.filter((c) => c.untracked_rank != null && !c.tracked).sort((a, b) => a.untracked_rank - b.untracked_rank);
-  const rest = items.filter((c) => !(c.untracked_rank != null && !c.tracked) && c.mtime >= now() - 7 * 86400);
+  const recent7 = items.filter((c) => !(c.untracked_rank != null && !c.tracked) && c.mtime >= now() - 7 * 86400);
+  // 부모가 없는 자동 실행 세션(claude -p, codex exec)은 접어 둔다. 등록한 것은 늘 보인다.
+  const auto = recent7.filter((c) => c.kind && !c.tracked);
+  const rest = recent7.filter((c) => !auto.includes(c));
   $("cand-list").innerHTML = (back.length ? `<div class="grp">최근 해제한 세션</div>${back.map((c) => row(c, true)).join("")}` : "")
     + (rest.length ? `<div class="grp">최근 7일 세션</div>${rest.map((c) => row(c, false)).join("")}` : "")
+    + (auto.length ? `<details class="auto"><summary>자동 실행 세션 ${auto.length}개 (claude -p, codex exec)</summary>${auto.map((c) => row(c, false)).join("")}</details>` : "")
     || `<div class="hint">최근 세션이 없습니다.</div>`;
 }
 $("settings-btn").onclick = (ev) => { ev.stopPropagation(); $("settings-menu").classList.toggle("open"); };

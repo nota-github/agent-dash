@@ -365,6 +365,19 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual(p.session_counts(), (2, 3))
 
 
+class ContinuationTest(unittest.TestCase):
+    def test_tracking_moves_to_continued_session(self):
+        with tempfile.TemporaryDirectory() as t:
+            tr = model.Tracked(Path(t) / "tracked.json")
+            tr.add("claude:old")
+            tr.set_completed("claude:old", True)
+            tr.replace("claude:old", "claude:new")
+            d = model.Tracked(Path(t) / "tracked.json").data
+            self.assertEqual(d["sessions"], ["claude:new"])
+            self.assertEqual(d["untracked"], [])  # 사용자가 해제한 것이 아니다
+            self.assertIn("claude:new", d["completed"])
+
+
 class LaunchTest(unittest.TestCase):
     def test_launch_is_remote_or_cli(self):
         L = model.launch_of

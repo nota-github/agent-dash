@@ -694,9 +694,21 @@ class App:
         items = [c for c in items if not c.get("parent")]  # 하위 세션은 부모 줄에 개수로만 보여준다
         back = sorted([c for c in items if c.get("untracked_rank") is not None and not c["tracked"]], key=lambda c: c["untracked_rank"])
         rest = [c for c in items if c not in back and c["mtime"] >= time.time() - 7 * 86400]
-        rows = [("grp", "최근 해제한 세션")] * bool(back) + [("c", c) for c in back] \
-            + [("grp", "최근 7일 세션")] * bool(rest) + [("c", c) for c in rest]
-        sel = next((i for i, r in enumerate(rows) if r[0] == "c"), 0)
+        # 부모가 없는 자동 실행 세션(claude -p, codex exec)은 접어 두고, 펼쳤을 때만 보여준다. 등록한 것은 늘 보인다.
+        auto = [c for c in rest if c.get("kind") and not c["tracked"]]
+        rest = [c for c in rest if c not in auto]
+        show_auto = False
+
+        def build():
+            r = [("grp", "최근 해제한 세션")] * bool(back) + [("c", c) for c in back] \
+                + [("grp", "최근 7일 세션")] * bool(rest) + [("c", c) for c in rest]
+            if auto:
+                r.append(("more", f"{'▾' if show_auto else '▸'} 자동 실행 세션 {len(auto)}개 (claude -p, codex exec)  Enter로 {'접기' if show_auto else '펼치기'}"))
+                if show_auto:
+                    r += [("c", c) for c in auto]
+            return r
+        rows = build()
+        sel = next((i for i, r in enumerate(rows) if r[0] in ("c", "more")), 0)
         self.scr.timeout(-1)
         try:
             while True:
@@ -709,6 +721,9 @@ class App:
                     y = 2 + i
                     if kind == "grp":
                         self.put(y, 2, [(c, col("gray") | curses.A_BOLD)], W - 4)
+                        continue
+                    if kind == "more":
+                        self.put(y, 2, [(cut(c, W - 4), (curses.A_REVERSE if start + i == sel else 0) | col("gray"))], W - 4)
                         continue
                     on = start + i == sel
                     mark = "[등록됨]" if c["tracked"] else "[ 등록 ]"
@@ -723,9 +738,12 @@ class App:
                 if k in (27, ord("q"), ord("a")):
                     return
                 if k in (curses.KEY_UP, ord("k")):
-                    sel = next((j for j in range(sel - 1, -1, -1) if rows[j][0] == "c"), sel)
+                    sel = next((j for j in range(sel - 1, -1, -1) if rows[j][0] in ("c", "more")), sel)
                 elif k in (curses.KEY_DOWN, ord("j")):
-                    sel = next((j for j in range(sel + 1, len(rows)) if rows[j][0] == "c"), sel)
+                    sel = next((j for j in range(sel + 1, len(rows)) if rows[j][0] in ("c", "more")), sel)
+                elif k in (10, 13, curses.KEY_ENTER, ord(" ")) and rows and rows[sel][0] == "more":
+                    show_auto = not show_auto
+                    rows = build()
                 elif k in (10, 13, curses.KEY_ENTER, ord(" ")) and rows and rows[sel][0] == "c":
                     c = rows[sel][1]
                     try:

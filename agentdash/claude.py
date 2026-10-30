@@ -93,7 +93,10 @@ class Transcript:
     def _feed(self, r: dict) -> None:
         t = r.get("type")
         ts = r.get("timestamp")
-        if t == "custom-title":
+        if t == "continued-in":
+            # 대화가 길어져 앱이 새 세션 ID로 이어 쓴 경우. 이후 기록은 그 세션 파일에 쌓인다.
+            self.meta["continued_in"] = r.get("continuedInSessionId")
+        elif t == "custom-title":
             self.meta["custom_title"] = r.get("customTitle")
         elif t == "ai-title":
             self.meta["ai_title"] = r.get("aiTitle")
