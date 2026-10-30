@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Dash</title>
+<style>
+:root {
+  --text: #1f2430; --text-2: #5b6272; --text-3: #8f95a3;
+  --line: rgba(31, 36, 48, .08); --line-2: rgba(31, 36, 48, .16);
+  --board: rgba(255, 255, 255, .55); --card: #ffffff; --track: #eceef3;
+  --blue: #3b76e8; --blue-bg: #e8f0ff; --blue-tx: #1d4ea8;
+  --green: #2fa36b; --green-bg: #e2f6ea; --green-tx: #1c6a43;
+  --amber: #e39a26; --amber-bg: #fdf1dd; --amber-tx: #8a5208;
+  --red: #dc4b4b; --red-bg: #fde8e8; --red-tx: #9a2626;
+  --gray: #a3a9b6; --gray-bg: #eff1f5; --gray-tx: #4d5361;
+  --violet: #7b5bd6; --violet-bg: #efe9ff; --violet-tx: #4f35a1;
+  --coral: #e0714f; --coral-bg: #fdebe4; --coral-tx: #9c4026;
+  --teal: #1f9c8c; --teal-bg: #def5f1; --teal-tx: #13685d;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+  color: var(--text);
+  background: #f6f7fb linear-gradient(135deg, rgba(225, 214, 255, .55) 0%, rgba(214, 233, 255, .5) 40%, rgba(214, 245, 231, .5) 75%, rgba(255, 228, 236, .45) 100%) fixed;
+}
+button { font: inherit; cursor: pointer; border: 1px solid var(--line-2); background: #fff; color: var(--text); border-radius: 8px; padding: 4px 10px; }
+button:hover { background: #f4f5f8; }
+button.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+button.ghost:hover { background: rgba(31,36,48,.05); }
+button.icon { padding: 4px; line-height: 0; border-color: transparent; background: transparent; color: var(--text-2); }
+button.icon:hover { background: rgba(31,36,48,.06); }
+svg.i { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }
+
+header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 22px 24px 6px; gap: 12px; }
+header .left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+header .right { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; }
+.brand { text-align: center; }
+.brand h1 { margin: 0; font-size: 34px; font-weight: 750; letter-spacing: -.02em; background: linear-gradient(90deg, #6b54d6, #3b76e8 50%, #1f9c8c); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.brand .sub { font-size: 12px; color: var(--text-3); }
+.update { text-align: center; padding: 6px 24px 0; }
+.upd { display: inline-flex; align-items: center; gap: 6px; background: var(--blue-bg); color: var(--blue-tx); border-radius: 999px; padding: 5px 14px; font-size: 12.5px; font-weight: 650; }
+.upd code { font-family: var(--mono); background: #2b2f37; color: #8fcf9f; border-radius: 6px; padding: 1px 7px; font-weight: 500; }
+#ver { font-family: var(--mono); color: var(--text-3); margin-left: 4px; }
+.warn { color: var(--red-tx); background: var(--red-bg); border-radius: 8px; padding: 2px 8px; font-size: 12px; }
+
+.summary { display: flex; gap: 12px; padding: 10px 24px 6px; justify-content: center; flex-wrap: wrap; }
+.tile { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,.72); border: 1px solid rgba(255,255,255,.9); border-radius: 14px; padding: 10px 16px; min-width: 140px; cursor: pointer; }
+.tile .k { font-size: 12px; color: var(--text-2); }
+.tile .v { font-size: 22px; font-weight: 700; line-height: 1.1; }
+.tile.on { outline: 2px solid var(--line-2); }
+.tile.wait.has { background: var(--amber-bg); }
+.tile.wait.has .v { color: var(--amber-tx); }
+.filters { display: flex; gap: 6px; padding: 6px 24px 14px; justify-content: center; flex-wrap: wrap; }
+.chip-btn { border-radius: 999px; padding: 3px 14px; font-size: 13px; background: rgba(255,255,255,.6); border-color: rgba(255,255,255,.9); }
+.chip-btn.on { background: var(--text); color: #fff; border-color: var(--text); }
+
+.toolbar { display: flex; gap: 14px; padding: 0 24px 14px; justify-content: center; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--text-2); }
+.seg-ctl { display: inline-flex; background: rgba(255,255,255,.6); border: 1px solid rgba(255,255,255,.9); border-radius: 999px; padding: 2px; gap: 2px; }
+.seg-ctl button { border: 0; background: transparent; border-radius: 999px; padding: 2px 12px; font-size: 12.5px; color: var(--text-2); }
+.seg-ctl.big { padding: 3px; background: rgba(255,255,255,.75); box-shadow: 0 1px 4px rgba(31,36,48,.06); }
+.seg-ctl.big button { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; padding: 5px 14px; }
+.seg-ctl.big button.on { color: var(--blue-tx); }
+.seg-ctl button.on { background: #fff; color: var(--text); font-weight: 650; box-shadow: 0 1px 3px rgba(31,36,48,.12); }
+.boards { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 18px; padding: 4px 24px 32px; align-items: start; }
+.empty { color: var(--text-2); padding: 40px 0; grid-column: 1 / -1; text-align: center; }
+
+.board { background: var(--board); border: 1px solid rgba(255,255,255,.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 2px 10px rgba(31,36,48,.04); }
+.board { position: relative; padding-top: 42px; }
+.bleft { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.btab { position: absolute; top: 0; left: 18px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px 7px; border-radius: 0 0 12px 12px; color: #fff; font-size: 12.5px; font-weight: 750; letter-spacing: .3px; box-shadow: 0 3px 8px rgba(31,36,48,.18); text-shadow: 0 1px 1px rgba(0,0,0,.12); }
+.btab svg { width: 14px; height: 14px; stroke-width: 2.2; }
+.bx { position: absolute; top: 8px; right: 10px; padding: 5px; line-height: 0; border: 0; border-radius: 8px; background: transparent; color: var(--text-3); }
+.bx:hover { background: var(--red-bg); color: var(--red-tx); }
+.host { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 650; color: var(--text-2); font-family: var(--mono); margin-top: -6px; }
+.host svg { width: 13px; height: 13px; }
+.host span { font-family: inherit; font-weight: 500; color: var(--text-3); }
+.dates { font-size: 11px; color: var(--text-3); line-height: 1.45; margin-bottom: 2px; font-variant-numeric: tabular-nums; }
+.mux { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--violet-bg); color: var(--violet-tx); white-space: nowrap; }
+.mux.none { background: var(--gray-bg); color: var(--gray-tx); }
+.role { font-size: 10.5px; font-weight: 700; padding: 0 6px; border-radius: 6px; white-space: nowrap; }
+.role.main { background: var(--blue-bg); color: var(--blue-tx); }
+.role.sub { background: var(--violet-bg); color: var(--violet-tx); }
+.role.child { background: var(--teal-bg); color: var(--teal-tx); }
+/* 사용자 차례인 보드만 바탕이 천천히 움직인다 */
+.board.st-idle { background: linear-gradient(120deg, rgba(255,255,255,.6) 0%, rgba(203,238,231,.85) 35%, rgba(255,240,214,.8) 65%, rgba(255,255,255,.6) 100%); background-size: 300% 300%; animation: idlebg 7s ease-in-out infinite; box-shadow: 0 0 0 2px rgba(31,156,140,.45); }
+@keyframes idlebg { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+.board.dragging { opacity: .45; }
+.board.drop-before::before, .board.drop-after::after { content: ""; position: absolute; background: var(--blue); border-radius: 3px; }
+.boards:not(.list) .board.drop-before::before { left: -11px; top: 8px; bottom: 8px; width: 4px; }
+.boards:not(.list) .board.drop-after::after { right: -11px; top: 8px; bottom: 8px; width: 4px; }
+.boards.list .board.drop-before::before { top: -11px; left: 8px; right: 8px; height: 4px; }
+.boards.list .board.drop-after::after { bottom: -11px; left: 8px; right: 8px; height: 4px; }
+/* 가로형: 한 줄에 세션 하나 */
+.boards.list { grid-template-columns: 1fr; }
+.boards.list .board { display: grid; grid-template-columns: minmax(280px, 360px) 1fr; column-gap: 18px; row-gap: 10px; align-items: start; }
+.boards.list .bleft { grid-column: 1; grid-row: 1; }
+.boards.list .board > .card { grid-column: 2; grid-row: 1 / span 2; }
+.boards.list .bfoot { grid-column: 1; grid-row: 2; align-self: end; }
+.boards.list .details { grid-column: 1 / -1; grid-row: 3; }
+.boards.list .kids { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.btab.claude { background: linear-gradient(135deg, #ec8a63, var(--coral)); }
+.btab.codex { background: linear-gradient(135deg, #2bb3a1, var(--teal)); }
+.btab .ent { font-weight: 550; opacity: .85; padding-left: 7px; border-left: 1px solid rgba(255,255,255,.45); }
+.board.st-needs_input { box-shadow: 0 0 0 2px var(--amber); }
+.board.st-maybe_waiting { box-shadow: 0 0 0 2px rgba(227,154,38,.55); }
+.board.st-stalled, .board.alert { box-shadow: 0 0 0 2px var(--red); }
+.bhead { display: flex; gap: 14px; align-items: center; }
+.bhead .names { flex: 1; min-width: 0; }
+.ws { font-weight: 700; font-size: 15.5px; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ws span.n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title { color: var(--text-2); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.statline { font-size: 12.5px; color: var(--text-2); margin-top: 2px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.eta { font-weight: 650; color: var(--text); }
+.agent { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 650; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.agent.claude { background: var(--coral-bg); color: var(--coral-tx); }
+.agent.codex { background: var(--teal-bg); color: var(--teal-tx); }
+.pill { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--gray-bg); color: var(--gray-tx); white-space: nowrap; }
+.pill.red { background: var(--red-bg); color: var(--red-tx); }
+.stats { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-2); }
+.stats span { display: inline-flex; gap: 4px; align-items: center; }
+.ctx-warn { color: var(--amber-tx); font-weight: 650; }
+.ctx-crit { color: var(--red-tx); font-weight: 650; }
+
+/* 상태 표시등 */
+.light { position: relative; display: inline-block; width: 12px; height: 12px; flex: 0 0 12px; border-radius: 50%; }
+.light::before, .light::after { content: ""; position: absolute; border-radius: 50%; }
+.l-running { background: var(--blue); }
+.l-running::before { inset: -4px; border: 2px solid transparent; border-top-color: var(--blue); border-right-color: var(--blue); animation: spin 2.2s linear infinite; }
+.l-needs_input { background: var(--amber); animation: blink 2.4s ease-in-out infinite; }
+.l-maybe_waiting { background: var(--amber); }
+.l-maybe_waiting::before { inset: -4px; border: 2px dashed var(--amber); animation: spin 6s linear infinite; opacity: .8; }
+.l-idle { background: transparent; border: 2.5px solid var(--gray); }
+.l-stalled { background: var(--red); }
+.l-stalled::after { inset: -4px; border: 2px solid var(--red); opacity: .35; }
+.l-done { background: var(--green); }
+.l-done::after { left: 4px; top: 2px; width: 3px; height: 6px; border: solid #fff; border-width: 0 1.6px 1.6px 0; border-radius: 0; transform: rotate(45deg); }
+.l-unreadable { background: var(--gray); }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes blink { 50% { opacity: .25; } }
+
+/* 진행률 원형 */
+.ring { flex: 0 0 64px; }
+.ring text { font: 700 14px -apple-system, "Pretendard", "Noto Sans KR", sans-serif; fill: var(--text); }
+.ring .lbl { font-size: 9px; font-weight: 500; fill: var(--text-3); }
+.ring .glyph { stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.ring .spin-g { transform-origin: 32px 32px; animation: spin 3s linear infinite; }
+.mrow { display: flex; align-items: center; gap: 12px; font-size: 11.5px; color: var(--text-2); }
+.mrow .ctx { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.mrow .ctx .bar { flex: 1; height: 5px; }
+.mrow span.m { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.mrow .err { color: var(--red-tx); }
+
+/* 단계 막대 */
+.segs { display: flex; gap: 3px; height: 10px; }
+.seg { border-radius: 4px; background: var(--track); min-width: 6px; }
+.seg.completed { background: var(--green); }
+.seg.in_progress { background: var(--blue); background-image: linear-gradient(45deg, rgba(255,255,255,.35) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.35) 50%, rgba(255,255,255,.35) 75%, transparent 75%); background-size: 12px 12px; animation: stripes 2s linear infinite; }
+@keyframes stripes { to { background-position: 12px 0; } }
+.bar { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 3px; transition: width .4s, background .4s; }
+
+/* 카드 */
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.card .ch { display: flex; align-items: center; gap: 8px; }
+.card .ctype { font-weight: 650; font-size: 13.5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .now { font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .now b { color: var(--blue-tx); font-weight: 600; }
+.kids { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.kid { background: #fafbfd; border: 1px solid var(--line); border-radius: 11px; padding: 8px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.kid:hover { border-color: var(--line-2); }
+.kid.open { grid-column: 1 / -1; background: #fff; }
+.kid .kh { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.kid .kt { font-size: 12px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.kid .kd { font-size: 11.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kid .kf { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-3); }
+.kid .kids { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+.kid .light { width: 9px; height: 9px; flex-basis: 9px; }
+.kid.st-done { opacity: .78; }
+
+/* 펼친 정보 */
+.details { display: none; flex-direction: column; gap: 10px; border-top: 1px dashed var(--line-2); padding-top: 10px; }
+.open-details .details { display: flex; }
+.dsec .dt { font-size: 11.5px; font-weight: 650; color: var(--text-3); margin-bottom: 3px; }
+.dsec .dv { font-size: 12.5px; color: var(--text-2); }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.steps li { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; }
+.steps .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; background: var(--track); transform: translateY(-1px); }
+.steps li.completed { color: var(--text-3); }
+.steps li.completed .dot { background: var(--green); }
+.steps li.in_progress { color: var(--blue-tx); font-weight: 600; }
+.steps li.in_progress .dot { background: var(--blue); }
+.mono { font-family: var(--mono); font-size: 11.5px; color: var(--text-2); word-break: break-all; }
+.resume { display: flex; gap: 6px; align-items: flex-start; background: #2b2f37; border: 1px solid #23262d; border-radius: 10px; padding: 8px 10px; }
+.resume code { flex: 1; font-family: var(--mono); font-size: 11.5px; word-break: break-all; color: #8fcf9f; }
+.resume button.icon { color: #a7adb8; }
+.resume button.icon:hover { background: rgba(255,255,255,.1); color: #fff; }
+.note { font-size: 12px; color: var(--amber-tx); }
+.tl { font-size: 12px; display: flex; gap: 6px; }
+.tl .t { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.tl.plan .x { color: var(--violet-tx); }
+.tl.error .x { color: var(--red-tx); }
+.delta { color: var(--violet); font-weight: 650; }
+.tok-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.tok-grid div { background: #f7f8fb; border-radius: 8px; padding: 4px 6px; font-size: 11px; color: var(--text-3); }
+.tok-grid b { display: block; font-size: 13px; color: var(--text); }
+.bfoot { display: flex; align-items: center; gap: 4px; }
+.bfoot .sp { flex: 1; }
+.more { font-size: 12.5px; display: inline-flex; gap: 4px; align-items: center; }
+.open-details .more svg { transform: rotate(180deg); }
+
+.panel-wrap { position: fixed; inset: 0; background: rgba(31,36,48,.25); display: none; justify-content: flex-end; z-index: 10; }
+.panel-wrap.open { display: flex; }
+.panel { width: min(560px, 100%); height: 100%; background: #fff; padding: 18px; overflow-y: auto; box-shadow: -8px 0 24px rgba(31,36,48,.12); }
+.panel h2 { font-size: 16px; margin: 0; flex: 1; }
+.panel .hint { color: var(--text-2); font-size: 12.5px; margin: 6px 0 12px; }
+.panel .grp { font-size: 12px; font-weight: 700; color: var(--text-3); margin: 14px 0 2px; }
+.cand.recent { background: var(--amber-bg); border-radius: 10px; padding: 8px 10px; border-bottom: 0; margin-bottom: 4px; }
+.modal-wrap { position: fixed; inset: 0; background: rgba(31,36,48,.28); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
+.modal-wrap.open { display: flex; }
+.modal { background: #fff; border-radius: 16px; padding: 20px 22px 16px; width: min(380px, 100%); box-shadow: 0 12px 40px rgba(31,36,48,.2); }
+.modal .mt { font-size: 15px; font-weight: 700; }
+.modal .md { font-size: 13px; color: var(--text-2); margin: 6px 0 16px; }
+.modal .mn { font-size: 12px; color: var(--text-3); margin: -8px 0 14px; word-break: break-all; }
+.modal .mb { display: flex; justify-content: flex-end; gap: 8px; }
+.menu-wrap { position: relative; }
+button.settings { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; background: linear-gradient(135deg, #6b54d6, #3b76e8); border-color: transparent; color: #fff; border-radius: 10px; padding: 6px 14px; box-shadow: 0 2px 8px rgba(59,118,232,.28); }
+button.settings:hover { background: linear-gradient(135deg, #5d47c8, #2f68d6); }
+.menu { position: absolute; right: 0; top: calc(100% + 6px); background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 28px rgba(31,36,48,.16); padding: 6px; min-width: 170px; display: none; z-index: 15; }
+.menu.open { display: block; }
+.menu button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; font-weight: 650; padding: 7px 10px; text-align: left; }
+.menu button:hover { background: var(--blue-bg); color: var(--blue-tx); }
+[data-tip] { position: relative; }
+[data-tip]::after { content: attr(data-tip); position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%); width: max-content; max-width: 240px; background: var(--text); color: #fff; font-size: 12px; font-weight: 500; line-height: 1.45; padding: 6px 10px; border-radius: 8px; box-shadow: 0 4px 14px rgba(31,36,48,.2); opacity: 0; pointer-events: none; transition: opacity .15s; white-space: normal; }
+[data-tip]:hover::after, [data-tip]:focus-visible::after { opacity: 1; }
+@media (max-width: 720px) { [data-tip]::after { right: auto; left: 0; top: calc(100% + 6px); transform: none; } }
+button.primary { background: var(--text); border-color: var(--text); color: #fff; }
+button.primary:hover { background: #343b4a; }
+.cand { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.cand .info { flex: 1; min-width: 0; }
+.cand .t1 { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cand .t2 { font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cand button.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.dirs { display: flex; gap: 6px; margin: 8px 0; }
+.dirs input { flex: 1; font: inherit; padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 8px; }
+.dir-item { display: flex; gap: 8px; align-items: center; font-size: 12.5px; padding: 2px 0; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--text); color: #fff; padding: 6px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
+@media (max-width: 720px) {
+  header { grid-template-columns: 1fr; text-align: center; }
+  header .left, header .right { justify-content: center; }
+  .boards { grid-template-columns: 1fr; padding-left: 16px; padding-right: 16px; }
+  .boards.list .board { display: flex; flex-direction: column; }
+  .brand h1 { font-size: 28px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="left"><span class="sub" id="updated" style="font-size:12px;color:var(--text-3)">연결 중</span><span id="warns"></span></div>
+  <div class="brand"><h1>Agent Dash</h1><div class="sub">내 에이전트 진행 현황 <span id="ver"></span></div></div>
+  <div class="right">
+    <button id="notify-btn" class="ghost">알림 켜기</button>
+    <span class="seg-ctl big" id="layout-ctl" title="보기 방식"><button data-layout="grid"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="18" rx="2"/><rect x="14" y="3" width="7" height="18" rx="2"/></svg>세로형</button><button data-layout="list"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/></svg>가로형</button></span>
+    <div class="menu-wrap">
+      <button id="settings-btn" class="settings" aria-haspopup="true"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>설정</button>
+      <div class="menu" id="settings-menu">
+        <button id="add-btn" data-tip="여기서 세션 목록을 보거나 추가/해제할 수 있습니다."><svg class="i" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>세션 관리</button>
+      </div>
+    </div>
+  </div>
+</header>
+<div class="update" id="update"></div>
+<div class="summary" id="summary"></div>
+<div class="filters" id="filters"></div>
+<div class="toolbar">
+  <span>에이전트</span><span class="seg-ctl" id="agent-ctl"><button data-agent="all">전체</button><button data-agent="claude">Claude</button><button data-agent="codex">Codex</button></span>
+  <span>정렬</span><span class="seg-ctl" id="sort-ctl"><button data-sort="recent">최근 실행순</button><button data-sort="name">이름순</button><button data-sort="agent">에이전트별</button><button data-sort="custom">직접 배치</button></span>
+</div>
+<main class="boards" id="boards"></main>
+<div class="modal-wrap" id="modal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="mt">이 세션 트래킹을 해제하시나요?</div>
+    <div class="md">나중에 다시 추가할 수 있습니다.</div>
+    <div class="mn" id="modal-name"></div>
+    <div class="mb"><button id="modal-cancel">취소</button><button class="primary" id="modal-ok">확인</button></div>
+  </div>
+</div>
+
+<div class="panel-wrap" id="panel-wrap">
+  <div class="panel">
+    <div style="display:flex;align-items:center;gap:8px"><h2>세션 관리</h2><button class="ghost" id="panel-close">닫기</button></div>
+    <div class="hint">최근 7일 안에 기록이 바뀐 세션입니다. 등록한 세션만 대시보드에 표시합니다.</div>
+    <div style="font-size:13px;font-weight:600">폴더 단위 자동 등록</div>
+    <div class="dirs"><input id="dir-input" placeholder="/path/to/project"><button id="dir-add">추가</button></div>
+    <div id="dir-list"></div>
+    <div id="cand-list" style="margin-top:12px"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const ICON = {
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  coins: '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>',
+  gauge: '<path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4-5"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+  chev: '<path d="M6 9l6 6 6-6"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  flag: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
+  layers: '<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/>',
+  spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>',
+  term: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/>',
+  server: '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+};
+const icon = (n) => `<svg class="i" viewBox="0 0 24 24">${ICON[n]}</svg>`;
+let state = null, filter = "all", lastStatus = {}, lastUpdate = 0;
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+let openBoards = new Set(store.get("openBoards", []));
+let openKids = new Set();
+
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function fmtTok(n) { if (!n) return "0"; if (n >= 1e6) return (n / 1e6).toFixed(1) + "M"; if (n >= 1e3) return Math.round(n / 1e3) + "k"; return String(n); }
+function fmtDur(sec) {
+  if (sec == null || isNaN(sec)) return "";
+  sec = Math.max(0, Math.round(sec));
+  if (sec < 60) return sec + "초";
+  const m = Math.round(sec / 60);
+  if (m < 60) return m + "분";
+  const h = Math.floor(m / 60), r = m % 60;
+  if (h < 24) return r ? `${h}시간 ${r}분` : `${h}시간`;
+  return `${Math.floor(h / 24)}일 ${h % 24}시간`;
+}
+const now = () => Date.now() / 1000;
+function ago(ts) { return ts ? fmtDur(now() - ts) + " 전" : ""; }
+function hhmm(ts) { if (!ts) return ""; return new Date(ts * 1000).toTimeString().slice(0, 5); }
+function fmtDate(ts) {
+  if (!ts) return "-";
+  const d = new Date(ts * 1000), p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+// 작업공간 이름 앞의 날짜(예: 261029-)는 빼고 보여준다. 날짜는 이름 위에 따로 표시한다.
+function displayName(ws) { return String(ws || "").replace(/^\d{6}[-_]/, "") || ws || ""; }
+function hostLine() {
+  const h = state && state.host;
+  if (!h) return "";
+  return `<div class="host" title="세션이 실행 중인 서버">${icon("server")}${esc(h.ip || h.name)}${h.ip && h.name ? `<span>${esc(h.name)}</span>` : ""}</div>`;
+}
+function muxBadge(m) {
+  if (!m || m.desktop) return "";
+  if (!m.mux) return `<span class="mux none" title="프로세스 ${m.pid}">멀티플렉서 없음</span>`;
+  return `<span class="mux" title="프로세스 ${m.pid}">${icon("layers")}${esc(m.mux)}${m.mux_session ? `: ${esc(m.mux_session)}` : ""}</span>`;
+}
+function ctxClass(p) { return p == null ? "" : p >= 85 ? "ctx-crit" : p >= 70 ? "ctx-warn" : ""; }
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1600); }
+// 실행 방식: remote(데스크톱 앱이나 IDE가 SSH로 연결해 실행), cli(서버 터미널에서 실행). 서버가 판단해 launch로 준다.
+function launchLabel(s) { return s.launch || ""; }
+// 진행률에 따라 색이 바뀐다: 낮음 코랄, 중간 주황, 절반 이상 파랑, 거의 끝 청록, 완료 초록
+function progColor(p) {
+  if (p == null) return "var(--gray)";
+  if (p >= 1) return "var(--green)";
+  if (p >= .75) return "var(--teal)";
+  if (p >= .5) return "var(--blue)";
+  if (p >= .25) return "var(--amber)";
+  return "var(--coral)";
+}
+const light = (st, label) => `<span class="light l-${st}" title="${esc(label || "")}"></span>`;
+
+const RING = {
+  running: ["var(--blue)", "작업 중"], needs_input: ["var(--amber)", "답 필요"], maybe_waiting: ["var(--amber)", "대기 추정"],
+  stalled: ["var(--red)", "정체"], idle: ["var(--teal)", "입력 차례"], done: ["var(--green)", "완료"], unreadable: ["var(--gray)", "읽기 실패"],
+};
+const GLYPH = {
+  idle: '<path class="glyph" d="M24 32l6 6 11-12"/>', done: '<path class="glyph" d="M24 32l6 6 11-12"/>',
+  stalled: '<path class="glyph" d="M32 22v12M32 40v1"/>', needs_input: '<path class="glyph" d="M27 26a5 5 0 1 1 7 5c-1.5.8-2 1.6-2 3M32 40v1"/>',
+  maybe_waiting: '<path class="glyph" d="M25 32h1M32 32h1M39 32h1"/>',
+};
+// 계획이 없는 세션은 상태 색 원으로 표시한다. 실행 중이면 호가 돈다.
+function statusRing(status) {
+  const r = 26, c = 2 * Math.PI * r;
+  const [color, label] = RING[status] || RING.idle;
+  const body = status === "running"
+    ? `<g class="spin-g"><circle cx="32" cy="32" r="${r}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${c * 0.28} ${c}"/></g><text class="lbl" x="32" y="36" text-anchor="middle">${label}</text>`
+    : `<circle cx="32" cy="32" r="${r}" fill="none" stroke="${color}" stroke-width="7" opacity=".9"/><g stroke="${color}">${GLYPH[status] || ""}</g>`;
+  return `<svg class="ring" width="64" height="64" viewBox="0 0 64 64"><title>${label}</title><circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--track)" stroke-width="7"/>${body}</svg>`;
+}
+function ring(p, status, remaining) {
+  if (p == null) return statusRing(status);
+  const r = 26, c = 2 * Math.PI * r;
+  const pct = p == null ? null : Math.round(p * 100);
+  const dash = p == null ? 0 : Math.max(0.02, Math.min(1, p)) * c;
+  const center = remaining && status === "idle"
+    ? `<text x="32" y="33" text-anchor="middle">${pct}%</text><text class="lbl" x="32" y="45" text-anchor="middle">${remaining}단계 남음</text>`
+    : `<text x="32" y="37" text-anchor="middle">${pct}%</text>`;
+  return `<svg class="ring" width="64" height="64" viewBox="0 0 64 64">
+    <circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--track)" stroke-width="7"/>
+    ${p == null ? "" : `<circle cx="32" cy="32" r="${r}" fill="none" stroke="${progColor(p)}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${dash} ${c}" transform="rotate(-90 32 32)"/>`}
+    ${center}</svg>`;
+}
+function pts(s) { return { S: 1, M: 3, L: 8 }[s.size || "M"] || 3; }
+function segs(steps) {
+  if (!steps || !steps.length) return "";
+  return `<div class="segs">${steps.map((s, i) => `<span class="seg ${s.status}" style="flex:${pts(s)}" title="${i + 1}. ${esc(s.content)}"></span>`).join("")}</div>`;
+}
+function bar(p) { return p == null ? "" : `<div class="bar"><i style="width:${Math.round(Math.min(1, p) * 100)}%;background:${progColor(p)}"></i></div>`; }
+function stepList(steps) {
+  return `<ul class="steps">${steps.map((s, i) => `<li class="${s.status}"><span class="dot"></span><span>${i + 1}. ${esc(s.content)}</span></li>`).join("")}</ul>`;
+}
+function elapsed(n) { return n.started ? fmtDur(((n.status === "done" ? n.last : null) || now()) - n.started) : ""; }
+
+function yesterdayStart() { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - 1); return d.getTime() / 1000; }
+function visible(s) {
+  if (agentFilter !== "all" && s.agent !== agentFilter) return false;
+  if (filter === "wait") return s.status === "needs_input" || s.status === "maybe_waiting";
+  if (filter === "running") return s.status === "running" || s.status === "stalled";
+  if (filter === "idle") return s.status === "idle";
+  if (filter === "since") return (s.last_activity || 0) >= yesterdayStart();
+  return true;
+}
+
+function renderSummary() {
+  const sm = state.summary;
+  const tiles = [
+    ["wait", "사용자 대기", sm.waiting, `wait ${sm.waiting ? "has" : ""}`, light(sm.waiting ? "needs_input" : "idle")],
+    ["running", "실행 중", sm.running, "", light(sm.running ? "running" : "idle")],
+    ["idle", "입력 차례", sm.idle, "", light("idle")],
+    ["all", "오늘 토큰", fmtTok(sm.tokens_today), "", icon("coins")],
+  ];
+  $("summary").innerHTML = tiles.map(([f, k, v, c, ic]) =>
+    `<div class="tile ${c} ${filter === f && f !== "all" ? "on" : ""}" data-f="${f}">${ic}<div><div class="k">${k}</div><div class="v">${v}</div></div></div>`).join("");
+  $("summary").querySelectorAll(".tile").forEach((el) => el.onclick = () => { filter = el.dataset.f; render(); });
+  const fs = [["all", `전체 ${sm.tracked}`], ["wait", "대기"], ["running", "실행 중"], ["idle", "입력 차례"], ["since", "어제 이후"]];
+  $("filters").innerHTML = fs.map(([f, l]) => `<button class="chip-btn ${filter === f ? "on" : ""}" data-f="${f}">${l}</button>`).join("");
+  $("filters").querySelectorAll("button").forEach((el) => el.onclick = () => { filter = el.dataset.f; render(); });
+}
+
+function kidHtml(s, n, byParent) {
+  const key = s.key + "|" + n.id;
+  const open = openKids.has(key);
+  const children = (byParent[n.id] || []).map((c) => kidHtml(s, c, byParent)).join("");
+  const detail = open ? `
+      ${n.current ? `<div class="kd" style="white-space:normal"><b style="color:var(--blue-tx)">현재</b> ${esc(n.current)}</div>` : ""}
+      ${n.steps && n.steps.length ? stepList(n.steps) : ""}
+      ${n.errors && n.errors.length ? `<div class="kd" style="white-space:normal;color:var(--red-tx)">${esc(n.errors[n.errors.length - 1].text)}</div>` : ""}
+      <div class="kf"><span>${icon("clock")} ${elapsed(n)}</span>${n.context_pct != null ? `<span class="${ctxClass(n.context_pct)}">${icon("gauge")} ${n.context_pct}%</span>` : ""}${n.model ? `<span>${esc(n.model)}</span>` : ""}</div>` : "";
+  return `<div class="kid st-${n.status} ${open ? "open" : ""}" data-kid="${esc(key)}">
+    <div class="kh">${light(n.status, n.status_label)}<span class="role ${n.kind === "session" ? "child" : "sub"}">${n.kind === "session" ? "하위 세션" : "서브 에이전트"}</span><span class="kt">${esc(n.type)}</span>${muxBadge(n.process)}</div>
+    <div class="kd" title="${esc(n.description)}">${esc(n.description || n.status_label)}</div>
+    ${n.progress != null && n.status !== "done" ? bar(n.progress) : ""}
+    <div class="kf"><span>${n.status === "done" ? "완료" : esc(n.status_label)}</span><span>${fmtTok(n.tokens)}</span></div>
+    ${detail}
+    ${children ? `<div class="kids">${children}</div>` : ""}
+  </div>`;
+}
+
+function boardHtml(s) {
+  const open = openBoards.has(s.key);
+  const nodes = s.nodes || [];
+  const main = nodes.find((n) => n.id === "main") || nodes[0];
+  const byParent = {};
+  for (const n of nodes) if (n.id !== "main") (byParent[n.parent || "main"] ||= []).push(n);
+  const kids = (byParent["main"] || []).map((n) => kidHtml(s, n, byParent)).join("");
+  const nKids = nodes.length - 1, nDone = nodes.filter((n) => n.id !== "main" && n.status === "done").length;
+  const waiting = s.status === "needs_input" || s.status === "maybe_waiting";
+  const statTime = waiting ? `${fmtDur(now() - (s.since || now()))}째 대기` : s.status === "running" ? `${ago(s.last_activity)} 활동` : `마지막 활동 ${ago(s.last_activity)}`;
+  const eta = s.eta ? (s.eta[1] <= 0 ? "곧 완료" : `남은 ${fmtDur(s.eta[0])}~${fmtDur(s.eta[1])}`) : "";
+  const cur = main && main.steps ? main.steps.find((x) => x.status === "in_progress") : null;
+  const alerts = (s.alerts || []).map((a) => `<span class="pill red">${esc(a.text)}</span>`).join("");
+  const tl = s.timeline || [];
+  const t = s.tokens || {};
+  return `<section class="board st-${s.status} ${(s.alerts || []).some((a) => a.kind === "error") ? "alert" : ""} ${open ? "open-details" : ""}" data-key="${esc(s.key)}">
+    <div class="btab ${s.agent}">${icon(s.agent === "codex" ? "term" : "spark")}${s.agent === "codex" ? "Codex" : "Claude"}${launchLabel(s) ? `<span class="ent">${esc(launchLabel(s))}</span>` : ""}</div>
+    <button class="bx" data-untrack="${esc(s.key)}" data-name="${esc(displayName(s.workspace))}" title="트래킹 해제">${icon("x")}</button>
+    <div class="bleft">
+    ${hostLine()}
+    <div class="bhead">
+      ${ring(s.progress, s.status, main && main.steps ? main.steps.filter((x) => x.status !== "completed").length : 0)}
+      <div class="names">
+        <div class="dates">세션 시작 : ${fmtDate(s.started)}<br>마지막 실행 : ${fmtDate(s.last_activity)}</div>
+        <div class="ws">${light(s.status, s.status_label)}<span class="n" title="${esc(s.workspace)}">${esc(displayName(s.workspace))}</span></div>
+        <div class="title">${esc(s.title)}</div>
+        <div class="statline">${s.user === "root" ? `<span class="pill">root</span>` : ""}${muxBadge(s.process)}<span>${esc(s.status_label)}</span>${eta ? `<span class="eta">${eta}</span>` : ""}</div>
+      </div>
+    </div>
+    ${alerts ? `<div>${alerts}</div>` : ""}
+    <div class="stats"><span>${icon("clock")} ${statTime}</span><span title="토큰 (캐시 읽기 제외)">${icon("coins")} ${fmtTok(t.io ?? t.total)}</span>${nKids ? `<span>${icon("layers")} 서브 ${nDone}/${nKids}</span>` : ""}</div>
+    </div>
+    <div class="card">
+      <div class="ch">${light(main.status, main.status_label)}<span class="role main">메인 에이전트</span><span class="ctype"></span>${main.model ? `<span class="pill">${esc(main.model)}</span>` : ""}</div>
+      ${segs(main.steps)}
+      ${cur ? `<div class="now"><b>${icon("flag")} 진행 중</b> ${esc(cur.content)}</div>` : ""}
+      <div class="mrow">
+        <div class="ctx" title="컨텍스트 사용률">${icon("gauge")}${bar(main.context_pct != null ? main.context_pct / 100 : 0).replace(/background:[^"]*/, `background:${main.context_pct >= 85 ? "var(--red)" : main.context_pct >= 70 ? "var(--amber)" : "var(--violet)"}`)}<span class="${ctxClass(main.context_pct)}">${main.context_pct ?? 0}%</span></div>
+        <span class="m" title="도구 호출 수">${icon("term")} ${main.tools ?? 0}</span>
+        ${main.error_count ? `<span class="m err" title="도구 오류 수">${icon("x")} ${main.error_count}</span>` : ""}
+        <span class="m" title="경과 시간">${icon("clock")} ${elapsed(main)}</span>
+      </div>
+      ${kids ? `<div class="kids">${kids}</div>` : ""}
+    </div>
+    <div class="details">
+      ${main.steps && main.steps.length ? `<div class="dsec"><div class="dt">계획 단계</div>${stepList(main.steps)}</div>` : ""}
+      ${main.current ? `<div class="dsec"><div class="dt">현재 작업</div><div class="mono">${esc(main.current)}</div></div>` : ""}
+      ${s.summary ? `<div class="dsec"><div class="dt">요약</div><div class="dv">${esc(s.summary)}</div></div>` : ""}
+      <div class="dsec"><div class="dt">이어서 작업하기</div><div class="resume"><code>${esc(s.resume)}</code><button class="icon" data-copy="${esc(s.resume)}" title="복사">${icon("copy")}</button></div>${s.resume_note ? `<div class="note">${esc(s.resume_note)}</div>` : ""}</div>
+      <div class="dsec"><div class="dt">경로</div><div class="mono">${esc(s.cwd || "")}${s.branch && s.branch !== "HEAD" ? ` (${esc(s.branch)})` : ""}</div></div>
+      <div class="dsec"><div class="dt">토큰</div><div class="dv" style="margin-bottom:4px">합계 ${fmtTok(t.io ?? t.total)} (캐시 읽기 제외), 캐시 읽기 포함 ${fmtTok(t.total)}</div><div class="tok-grid"><div>입력<b>${fmtTok(t.input)}</b></div><div>출력<b>${fmtTok(t.output)}</b></div><div>캐시 읽기<b>${fmtTok(t.cache_read)}</b></div><div>캐시 쓰기<b>${fmtTok(t.cache_write)}</b></div></div>${s.cost != null ? `<div class="dv" style="margin-top:4px">누적 비용 $${s.cost}</div>` : ""}</div>
+      ${tl.length ? `<div class="dsec"><div class="dt">계획 변경과 오류</div>${tl.slice(-8).map((x) => `<div class="tl ${x.kind}"><span class="t">${hhmm(x.ts)}</span><span class="x">${esc(x.text)}${x.delta_sec ? ` <span class="delta">(${x.delta_sec > 0 ? "+" : "-"}${fmtDur(Math.abs(x.delta_sec))})</span>` : ""}</span></div>`).join("")}</div>` : ""}
+    </div>
+    <div class="bfoot">
+      <button class="ghost more" data-more="${esc(s.key)}">${open ? "접기" : "자세히"} ${icon("chev")}</button>
+      <span class="sp"></span>
+      <button class="icon" data-copy="${esc(s.resume)}" title="재개 명령 복사">${icon("copy")}</button>
+    </div>
+  </section>`;
+}
+
+let sortMode = store.get("sortMode", "recent"), layout = store.get("layout", "grid"), agentFilter = store.get("agentFilter", "all");
+let order = store.get("order", []);
+let dragKey = null, pendingRender = false;
+function sorted(list) {
+  const recent = (a, b) => (b.last_activity || 0) - (a.last_activity || 0);
+  if (sortMode === "agent") return [...list].sort((a, b) => (a.agent === "codex") - (b.agent === "codex") || recent(a, b));
+  if (sortMode === "name") return [...list].sort((a, b) => displayName(a.workspace).localeCompare(displayName(b.workspace), "ko") || String(a.title).localeCompare(String(b.title), "ko") || recent(a, b));
+  if (sortMode === "custom") {
+    // 직접 배치한 순서를 따른다. 순서에 없는 새 세션은 맨 앞에 최근 순으로 둔다.
+    const idx = Object.fromEntries(order.map((k, i) => [k, i]));
+    return [...list].sort((a, b) => ((idx[a.key] ?? -1) - (idx[b.key] ?? -1)) || recent(a, b));
+  }
+  return [...list].sort(recent);
+}
+function syncControls() {
+  document.querySelectorAll("#sort-ctl button").forEach((b) => b.classList.toggle("on", b.dataset.sort === sortMode));
+  document.querySelectorAll("#agent-ctl button").forEach((b) => b.classList.toggle("on", b.dataset.agent === agentFilter));
+  document.querySelectorAll("#layout-ctl button").forEach((b) => b.classList.toggle("on", b.dataset.layout === layout));
+  $("boards").classList.toggle("list", layout === "list");
+}
+$("sort-ctl").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-sort]"); if (!b) return;
+  if (b.dataset.sort === "custom" && !order.length) order = sorted(state ? state.sessions : []).map((s) => s.key);
+  sortMode = b.dataset.sort; store.set("sortMode", sortMode); store.set("order", order); render();
+});
+$("agent-ctl").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-agent]"); if (!b) return;
+  agentFilter = b.dataset.agent; store.set("agentFilter", agentFilter); render();
+});
+$("layout-ctl").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-layout]"); if (!b) return;
+  layout = b.dataset.layout; store.set("layout", layout); render();
+});
+
+function render() {
+  if (!state) return;
+  if (dragKey) { pendingRender = true; return; }
+  renderSummary();
+  syncControls();
+  const list = sorted(state.sessions.filter(visible));
+  $("boards").innerHTML = list.length ? list.map(boardHtml).join("")
+    : `<div class="empty">${state.sessions.length ? "이 필터에 해당하는 세션이 없습니다." : "등록한 세션이 없습니다. 오른쪽 위 \"설정 > 세션 관리\"에서 세션을 고르세요."}</div>`;
+  const warns = [];
+  if (state.root_status && !state.root_status.ok) warns.push(`root 기록을 읽을 수 없음: ${state.root_status.error || ""}`);
+  if (state.server_error) warns.push(`서버 오류: ${state.server_error}`);
+  $("warns").innerHTML = warns.map((w) => `<span class="warn">${esc(w)}</span>`).join(" ");
+  const app = state.app || {};
+  $("ver").innerHTML = app.current ? `v${esc(app.current)}` : "";
+  $("update").innerHTML = app.update
+    ? `<span class="upd" title="서버 터미널에서 agent-dash update를 실행하세요">${icon("spark")}새 버전(v${esc(app.latest)})이 나왔습니다. 업데이트: <code>agent-dash update</code></span>` : "";
+}
+
+$("boards").addEventListener("click", async (ev) => {
+  const t = ev.target.closest("[data-copy],[data-more],[data-untrack],[data-kid]");
+  if (!t) return;
+  if (t.dataset.copy !== undefined) {
+    ev.stopPropagation();
+    try { await navigator.clipboard.writeText(t.dataset.copy); toast("재개 명령을 복사했습니다"); }
+    catch (e) { prompt("복사할 명령", t.dataset.copy); }
+  } else if (t.dataset.more !== undefined) {
+    const k = t.dataset.more; openBoards.has(k) ? openBoards.delete(k) : openBoards.add(k);
+    store.set("openBoards", [...openBoards]); render();
+  } else if (t.dataset.untrack !== undefined) {
+    ev.stopPropagation();
+    askUntrack(t.dataset.untrack, t.dataset.name);
+  } else if (t.dataset.kid !== undefined) {
+    ev.stopPropagation();
+    const k = t.dataset.kid; openKids.has(k) ? openKids.delete(k) : openKids.add(k); render();
+  }
+});
+
+let modalKey = null;
+function askUntrack(key, name) {
+  modalKey = key; $("modal-name").textContent = name || key; $("modal").classList.add("open"); $("modal-ok").focus();
+}
+function closeModal() { modalKey = null; $("modal").classList.remove("open"); }
+$("modal-cancel").onclick = closeModal;
+$("modal").addEventListener("click", (ev) => { if (ev.target === $("modal")) closeModal(); });
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && modalKey) closeModal(); });
+$("modal-ok").onclick = async () => {
+  const key = modalKey; closeModal();
+  if (!key) return;
+  const r = await post("/api/untrack", { key });
+  if (r.ok) toast("해제했습니다. 오른쪽 위 \"설정 > 세션 관리\"에서 다시 추가할 수 있습니다");
+};
+
+// 보드 끌어서 옮기기. 펼친 정보, 하위 카드, 버튼 위에서는 끌지 않아 글자 선택과 클릭이 그대로 동작한다.
+const boardsEl = $("boards");
+boardsEl.addEventListener("mousedown", (ev) => {
+  const b = ev.target.closest(".board");
+  if (!b) return;
+  b.draggable = !ev.target.closest(".details,.kid,button,code,a,input");
+});
+boardsEl.addEventListener("dragstart", (ev) => {
+  const b = ev.target.closest(".board"); if (!b) return;
+  dragKey = b.dataset.key; b.classList.add("dragging");
+  ev.dataTransfer.effectAllowed = "move";
+  try { ev.dataTransfer.setData("text/plain", dragKey); } catch (e) {}
+});
+function clearDrop() { boardsEl.querySelectorAll(".drop-before,.drop-after").forEach((x) => x.classList.remove("drop-before", "drop-after")); }
+function dropSide(b, ev) {
+  const r = b.getBoundingClientRect();
+  return layout === "list" ? (ev.clientY < r.top + r.height / 2 ? "before" : "after") : (ev.clientX < r.left + r.width / 2 ? "before" : "after");
+}
+boardsEl.addEventListener("dragover", (ev) => {
+  if (!dragKey) return;
+  const b = ev.target.closest(".board"); if (!b || b.dataset.key === dragKey) return;
+  ev.preventDefault();
+  clearDrop(); b.classList.add("drop-" + dropSide(b, ev));
+});
+boardsEl.addEventListener("drop", (ev) => {
+  if (!dragKey) return;
+  ev.preventDefault();
+  const b = ev.target.closest(".board");
+  const keys = [...boardsEl.querySelectorAll(".board")].map((x) => x.dataset.key).filter((k) => k !== dragKey);
+  if (b && b.dataset.key !== dragKey) {
+    const i = keys.indexOf(b.dataset.key);
+    keys.splice(dropSide(b, ev) === "before" ? i : i + 1, 0, dragKey);
+    // 필터로 가려진 세션의 순서는 그대로 둔다
+    const shown = new Set(keys);
+    order = [...keys, ...order.filter((k) => !shown.has(k))];
+    sortMode = "custom"; store.set("order", order); store.set("sortMode", sortMode);
+  }
+});
+boardsEl.addEventListener("dragend", () => {
+  clearDrop(); dragKey = null;
+  boardsEl.querySelectorAll(".board").forEach((x) => { x.classList.remove("dragging"); x.draggable = false; });
+  pendingRender = false; render();
+});
+
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) toast(j.error || "요청 실패");
+  return j;
+}
+
+function notifyChanges(prev, next) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const msgs = { needs_input: "사용자 입력을 기다립니다", maybe_waiting: "승인 대기 중일 수 있습니다", idle: "사용자가 입력(승인)할 차례입니다", stalled: "10분째 변화가 없습니다" };
+  for (const s of next.sessions) {
+    const before = prev[s.key];
+    if (before && before !== s.status && msgs[s.status] && !(before === "needs_input" && s.status === "maybe_waiting")) {
+      try { new Notification(`${s.workspace}: ${s.status_label}`, { body: `${s.title}\n${msgs[s.status]}`, tag: s.key }); } catch (e) {}
+    }
+  }
+}
+
+function applyState(next) {
+  if (state) notifyChanges(lastStatus, next);
+  lastStatus = Object.fromEntries(next.sessions.map((s) => [s.key, s.status]));
+  state = next; lastUpdate = Date.now(); render();
+}
+
+function connect() {
+  const es = new EventSource("/api/events");
+  es.addEventListener("state", (e) => applyState(JSON.parse(e.data)));
+  es.onerror = () => { $("updated").textContent = "연결 끊김, 다시 연결 중"; };
+}
+setInterval(() => {
+  if (lastUpdate) $("updated").textContent = `갱신 ${fmtDur((Date.now() - lastUpdate) / 1000)} 전`;
+  if (state && !document.querySelector(".panel-wrap.open")) render();
+}, 5000);
+
+function syncNotifyBtn() {
+  const b = $("notify-btn");
+  if (!("Notification" in window)) { b.textContent = "알림 지원 안 됨"; return; }
+  b.textContent = Notification.permission === "granted" ? "알림 켜짐" : Notification.permission === "denied" ? "알림 차단됨" : "알림 켜기";
+}
+$("notify-btn").onclick = async () => { if ("Notification" in window) { await Notification.requestPermission(); syncNotifyBtn(); } };
+syncNotifyBtn();
+
+async function openPanel() {
+  $("panel-wrap").classList.add("open");
+  $("cand-list").innerHTML = `<div class="hint">불러오는 중</div>`;
+  const items = await (await fetch("/api/candidates?days=7")).json();
+  if (!$("panel-wrap").classList.contains("open")) return;
+  const dirs = (state && state.tracked_dirs) || [];
+  $("dir-list").innerHTML = dirs.map((d) => `<div class="dir-item"><span class="mono" style="flex:1">${esc(d)}</span><button class="ghost" data-undir="${esc(d)}">해제</button></div>`).join("");
+  const row = (c, recent) => `<div class="cand ${recent ? "recent" : ""}"><div class="info">
+      <div class="t1"><span class="agent ${c.agent}" style="margin-right:6px">${c.agent === "codex" ? "Codex" : "Claude"}</span>${esc(c.title || "제목 없음")}</div>
+      <div class="t2">${esc(displayName(c.workspace))}, ${esc(launchLabel(c))}, ${esc(c.user)}, ${ago(c.mtime)}</div></div>
+      <button class="${c.tracked ? "on" : ""}" data-key="${esc(c.key)}" data-tracked="${c.tracked ? 1 : 0}">${c.tracked ? "등록됨" : "등록"}</button></div>`;
+  const back = items.filter((c) => c.untracked_rank != null && !c.tracked).sort((a, b) => a.untracked_rank - b.untracked_rank);
+  const rest = items.filter((c) => !(c.untracked_rank != null && !c.tracked) && c.mtime >= now() - 7 * 86400);
+  $("cand-list").innerHTML = (back.length ? `<div class="grp">최근 해제한 세션</div>${back.map((c) => row(c, true)).join("")}` : "")
+    + (rest.length ? `<div class="grp">최근 7일 세션</div>${rest.map((c) => row(c, false)).join("")}` : "")
+    || `<div class="hint">최근 세션이 없습니다.</div>`;
+}
+$("settings-btn").onclick = (ev) => { ev.stopPropagation(); $("settings-menu").classList.toggle("open"); };
+document.addEventListener("click", (ev) => { if (!ev.target.closest(".menu-wrap")) $("settings-menu").classList.remove("open"); });
+$("add-btn").onclick = () => { $("settings-menu").classList.remove("open"); openPanel(); };
+$("panel-close").onclick = () => $("panel-wrap").classList.remove("open");
+$("panel-wrap").addEventListener("click", async (ev) => {
+  if (ev.target === $("panel-wrap")) return $("panel-wrap").classList.remove("open");
+  const b = ev.target.closest("button[data-key],button[data-undir]");
+  if (!b) return;
+  if (b.dataset.undir) await post("/api/untrack", { dir: b.dataset.undir });
+  else await post(b.dataset.tracked === "1" ? "/api/untrack" : "/api/track", { key: b.dataset.key });
+  setTimeout(openPanel, 300);
+});
+$("dir-add").onclick = async () => { const d = $("dir-input").value.trim(); if (!d) return toast("폴더 경로를 입력하세요"); await post("/api/track", { dir: d }); $("dir-input").value = ""; setTimeout(openPanel, 300); };
+
+fetch("/api/state").then((r) => r.json()).then(applyState).catch(() => {});
+connect();
+</script>
+</body>
+</html>
