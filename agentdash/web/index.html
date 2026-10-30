@@ -167,7 +167,7 @@ header .right { display: flex; justify-content: flex-end; align-items: center; g
 .ring text { font: 700 14px -apple-system, "Pretendard", "Noto Sans KR", sans-serif; fill: var(--text); }
 .ring .lbl { font-size: 9px; font-weight: 500; fill: var(--text-3); }
 .ring .glyph { stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.ring .spin-g { transform-origin: 32px 32px; animation: spin 3s linear infinite; }
+/* 실행 중 호는 SVG animateTransform으로 원 중심(32, 32)에서 돌린다. CSS transform-origin은 브라우저마다 기준이 달라 원 밖으로 돌 수 있다 */
 .mrow { display: flex; align-items: center; gap: 12px; font-size: 11.5px; color: var(--text-2); }
 .mrow .ctx { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
 .mrow .ctx .bar { flex: 1; height: 5px; }
@@ -453,7 +453,7 @@ function statusRing(status) {
   const r = 26, c = 2 * Math.PI * r;
   const [color, label] = RING[status] || RING.idle;
   const body = status === "running"
-    ? `<g class="spin-g"><circle cx="32" cy="32" r="${r}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${c * 0.28} ${c}"/></g><text class="lbl" x="32" y="36" text-anchor="middle">${label}</text>`
+    ? `<g><circle cx="32" cy="32" r="${r}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${c * 0.28} ${c}"/><animateTransform attributeName="transform" type="rotate" from="0 32 32" to="360 32 32" dur="3s" repeatCount="indefinite"/></g><text class="lbl" x="32" y="36" text-anchor="middle">${label}</text>`
     : `<circle cx="32" cy="32" r="${r}" fill="none" stroke="${color}" stroke-width="7" opacity=".9"/><g stroke="${color}">${GLYPH[status] || ""}</g>`;
   return `<svg class="ring" width="64" height="64" viewBox="0 0 64 64"><title>${label}</title><circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--track)" stroke-width="7"/>${body}</svg>`;
 }
