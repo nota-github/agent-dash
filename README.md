@@ -8,6 +8,19 @@ Claude Code와 Codex로 여러 작업을 동시에 돌릴 때, 세션마다 메�
 - 토큰 사용량, 컨텍스트 사용률, 다음 날 이어서 작업할 재개 명령
 - 정렬(최근 실행순, 이름순, 에이전트별, 직접 배치), 끌어서 위치 바꾸기, 세로형과 가로형 보기
 
+![웹 화면, 세로형](docs/images/web-grid.png)
+
+<details>
+<summary>가로형 보기, 터미널 화면(TUI)</summary>
+
+![웹 화면, 가로형](docs/images/web-list.png)
+
+![터미널 화면](docs/images/tui.png)
+
+</details>
+
+화면의 세션, 경로, 서버 주소는 모두 예시 값입니다.
+
 Claude와 Codex가 원래 남기는 기록 파일을 읽기만 합니다. 훅, 플러그인, 스킬을 설치하지 않고, 추가 토큰도 쓰지 않습니다. 사용자가 입력한 내용(요청, 답변, 거부 사유)은 수집하지도, 저장하지도, 표시하지도 않습니다. 화면에는 Claude나 Codex가 만든 제목과 요약만 나옵니다.
 
 ## 설치
@@ -39,13 +52,29 @@ curl -fsSL https://raw.githubusercontent.com/nota-github/agent-dash/main/install
 | 2. 로컬 앱을 원격 서버에 SSH로 연결해 실행 | 지원 | 원격 서버에 설치. 웹은 SSH 터널로 접속 |
 | 3. 원격 서버에 SSH로 접속해 CLI로 실행 | 지원 | 원격 서버에 설치. 웹은 SSH 터널, TUI는 그 SSH 터미널에서 |
 
+## 세션 등록
+
+설치 직후에는 화면에 아무 세션도 나오지 않습니다. 볼 세션을 직접 등록해야 하고, 등록한 세션만 읽습니다. 셋 중 편한 방법을 씁니다.
+
+| 방법 | 등록 | 해제 |
+|---|---|---|
+| 웹 화면 | 오른쪽 위 "설정 > 세션 관리"에서 세션 옆 "등록" | 카드 오른쪽 위 x, 또는 세션 관리의 "등록됨" |
+| 터미널 화면 | `a`(세션 관리)에서 세션을 고르고 `Enter` | 카드를 고르고 `x`, 또는 세션 관리에서 `Enter` |
+| 명령 | `agent-dash track <세션 ID 앞부분>` | `agent-dash untrack <세션 ID 앞부분>` |
+
+```bash
+agent-dash sessions                 # 최근 세션 목록과 ID (* 등록됨)
+agent-dash track 3b71ac63           # 세션 ID 앞부분으로 등록
+agent-dash track --dir ~/work/api   # 이 폴더 아래에서 실행하는 세션을 앞으로 생기는 것까지 모두 등록
+```
+
+- 등록한 세션이 실행한 서브 에이전트와 `claude -p`, `codex exec` 같은 하위 세션은 따로 등록하지 않아도 그 카드 안에 들어갑니다.
+- 해제한 세션은 세션 관리 목록 맨 위 "최근 해제한 세션"에 남아 있어 다시 등록할 수 있습니다.
+- 등록 목록은 웹 화면과 터미널 화면이 함께 씁니다.
+
 ## 사용법
 
 ```bash
-agent-dash sessions                 # 최근 세션 목록 (* 등록됨)
-agent-dash track <세션 ID 앞부분>    # 세션 등록
-agent-dash track --dir <폴더>       # 폴더 아래에서 실행하는 세션을 모두 등록
-
 agent-dash start                    # 웹 서버 켜기 (백그라운드)
 agent-dash stop                     # 웹 서버 끄기
 agent-dash restart                  # 웹 서버 다시 켜기
