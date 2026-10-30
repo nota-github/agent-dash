@@ -132,6 +132,52 @@ def load_config() -> dict:
         return {}
 
 
+def project_root(cwd: str) -> str:
+    """작업공간 폴더(ws/<이름>)까지 줄인 경로. ws 구조가 아니면 그대로 둔다."""
+    parts = cwd.rstrip("/").split("/")
+    if "ws" in parts and parts.index("ws") + 1 < len(parts):
+        return "/".join(parts[:parts.index("ws") + 2])
+    return cwd.rstrip("/")
+
+
+MAIN_FOLDER_SHARE = 0.2  # 시작 폴더 아래 폴더가 기록의 이 비율 이상이면 그 폴더를 세션 폴더로 본다
+WS_FOLDER_SHARE = 0.1  # ws/<이름> 작업공간은 이 비율만 넘어도 우선한다 (repos 같은 참고용 폴더보다 작업 폴더가 맞다)
+
+
+def main_folder(first: str | None, counts: dict[str, int]) -> str | None:
+    """카드에 보여줄 세션 폴더.
+
+    데스크톱 앱 세션은 상위 폴더에서 시작해 작업공간으로 옮겨 다니는 경우가 많다. 시작 폴더 아래에서
+    가장 많이 쓴 작업공간(ws/<이름>, 아니면 시작 폴더 바로 아래 폴더)이 전체 기록의 20% 이상이면 그 폴더를,
+    아니면 시작 폴더를 쓴다.
+    """
+    if not first:
+        return None
+    base = first.rstrip("/")
+    total = sum(counts.values()) or 1
+    groups: dict[str, int] = {}
+    ws_groups: set[str] = set()
+    for cwd, n in counts.items():
+        cwd = cwd.rstrip("/")
+        if not cwd.startswith(base + "/"):
+            continue
+        rel = cwd[len(base) + 1:].split("/")
+        if "ws" in rel[:-1]:
+            root = project_root(cwd)  # 시작 폴더 아래 ws/<이름>
+            ws_groups.add(root)
+        else:
+            root = base + "/" + rel[0]  # 시작 폴더 바로 아래 폴더
+        groups[root] = groups.get(root, 0) + n
+    ws = [g for g in ws_groups if groups[g] / total >= WS_FOLDER_SHARE]
+    if ws:
+        return max(ws, key=groups.get)
+    if groups:
+        best = max(groups, key=groups.get)
+        if groups[best] / total >= MAIN_FOLDER_SHARE:
+            return best
+    return first
+
+
 def context_window(model: str | None) -> int:
     for prefix, n in CONTEXT_WINDOW.items():
         if model and model.startswith(prefix):
@@ -270,6 +316,7 @@ class Sources:
         if cached and cached[0] == f.mtime:
             return cached[1]
         info = {"title": None, "cwd": None, "entry": None}
+        counts: dict[str, int] = {}
         if kind.startswith("claude"):
             tail = fs.read_tail(f.path, 256 * 1024).decode(errors="replace").splitlines()
             for line in reversed(tail):
@@ -284,21 +331,30 @@ class Sources:
                     info["title"] = d.get("customTitle")
                 elif t == "ai-title" and not info.get("ai"):
                     info["ai"] = d.get("aiTitle")
-                if not info["cwd"] and d.get("cwd"):
-                    info["cwd"], info["entry"] = d.get("cwd"), d.get("entrypoint")
+                if d.get("cwd"):
+                    counts[d["cwd"]] = counts.get(d["cwd"], 0) + 1
+                    if not info["entry"]:
+                        info["entry"] = d.get("entrypoint")
             info["title"] = info["title"] or info.pop("ai", None)
             info.pop("ai", None)
             info["headless"] = info["entry"] == "sdk-cli" or (info["entry"] == "claude-desktop" and not info.pop("named", False))
             info.pop("named", None)
             info["launch"] = launch_of("claude", info["entry"], headless=info["headless"])
-            for line in fs.read_head(f.path, 64 * 1024).split(b"\n")[:50]:
+            first_cwd = None
+            for line in fs.read_head(f.path, 64 * 1024).split(b"\n")[:200]:
                 try:
-                    ts = json.loads(line).get("timestamp")
+                    d = json.loads(line)
                 except ValueError:
                     continue
-                if ts:
-                    info["first_ts"] = ts
+                if d.get("timestamp") and not info.get("first_ts"):
+                    info["first_ts"] = d["timestamp"]
+                if d.get("cwd") and not first_cwd:
+                    first_cwd = d["cwd"]
+                if info.get("first_ts") and first_cwd:
                     break
+            first_cwd = first_cwd or (max(counts, key=counts.get) if counts else None)
+            info["cwd_first"] = first_cwd
+            info["cwd"] = main_folder(first_cwd, counts)
         else:
             first = fs.read_head(f.path, 1024 * 1024).split(b"\n", 1)[0]
             try:
@@ -563,10 +619,10 @@ class Registry:
         windows = []
         for key, s in self.sessions.items():
             if isinstance(s, ClaudeSession) and not s.headless:
-                cwd = s.main.meta.get("cwd")
+                cwds = [c.rstrip("/") for c in (s.main.cwd_counts or {}) if c] or [(s.main.meta.get("cwd") or "").rstrip("/")]
                 a, b = parse_ts(s.main.first_ts), parse_ts(s.main.last_ts)
-                if cwd and a and b:
-                    windows.append((key, cwd.rstrip("/"), a, max(b, s.mtime or 0) + 120))
+                if any(cwds) and a and b:
+                    windows.append((key, cwds, a, max(b, s.mtime or 0) + 120))
         parents = {w[0] for w in windows}
         cands = [c for c in getattr(self, "_cands", [])
                  if c["key"] not in parents and (c.get("entry") == "codex_exec" or c.get("headless"))]
@@ -581,9 +637,10 @@ class Registry:
             # 폴더가 가장 가까운 부모를 고르고, 같으면 가장 최근에 시작한 부모를 고른다.
             # 상위 폴더에서 실행한 세션이 다른 작업의 하위 세션을 가져가지 않게 한다.
             best = None
-            for key, pcwd, a, _ in windows:
-                if (cwd == pcwd or cwd.startswith(pcwd + "/")) and a <= started <= ends[key]:
-                    rank = (len(pcwd), a)
+            for key, pcwds, a, _ in windows:
+                near = max((len(p) for p in pcwds if p and (cwd == p or cwd.startswith(p + "/"))), default=-1)
+                if near >= 0 and a <= started <= ends[key]:
+                    rank = (near, a)
                     if best is None or rank > best[1]:
                         best = (key, rank)
             if best:
@@ -664,7 +721,7 @@ class Registry:
         items = []
         for key, s in self.sessions.items():
             if isinstance(s, ClaudeSession):
-                items.append({"key": key, "agent": "claude", "cwd": s.main.meta.get("cwd"), "first_ts": parse_ts(s.main.first_ts)})
+                items.append({"key": key, "agent": "claude", "cwd": s.main.cwd_first or s.main.meta.get("cwd"), "first_ts": parse_ts(s.main.first_ts)})
             elif launch_of("codex", s.meta.get("originator"), s.meta.get("source")) == "cli":
                 items.append({"key": key, "agent": "codex", "cwd": s.meta.get("cwd"), "first_ts": parse_ts(s.first_ts)})
         try:
@@ -784,7 +841,9 @@ class Registry:
             first = bg[0]["summary"] if bg else ""
             detail = f"백그라운드 작업 {n_bg}개 진행 중" + (f". {first}" if first else "")
         entry = m.get("entrypoint")
-        cmd, note = resume_command("claude", source, s.id, m.get("cwd"), entry, status)
+        # 재개는 세션을 시작한 폴더에서 해야 이어진다. 카드에는 많이 쓴 작업공간을 보여준다.
+        folder = main_folder(s.main.cwd_first, s.main.cwd_counts) or m.get("cwd")
+        cmd, note = resume_command("claude", source, s.id, s.main.cwd_first or m.get("cwd"), entry, status)
         nodes.insert(0, {
             "id": "main", "parent": None, "depth": 0, "kind": "main", "type": "메인 에이전트",
             "description": "", "step": None, "status": main_status, "status_label": main_label,
@@ -798,8 +857,8 @@ class Registry:
             "key": key, "agent": "claude", "source": source, "id": s.id,
             "user": "root" if source == "claude-root" else self.src.local.user,
             "entry": entry, "launch": launch_of("claude", entry, headless=s.headless),
-            "title": s.title(), "workspace": workspace_name(m.get("cwd")),
-            "cwd": m.get("cwd"), "branch": m.get("gitBranch"), "version": m.get("version"),
+            "title": s.title(), "workspace": workspace_name(folder),
+            "cwd": folder, "start_cwd": s.main.cwd_first, "branch": m.get("gitBranch"), "version": m.get("version"),
             "status": status, "status_label": board_label, "since": since, "detail": detail,
             "started": parse_ts(s.main.first_ts), "last_activity": max(parse_ts(s.main.last_ts) or 0, sub_activity) or None,
             "summary": m.get("away_summary"),

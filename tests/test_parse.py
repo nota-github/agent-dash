@@ -396,6 +396,20 @@ class LastMessageTest(unittest.TestCase):
             self.assertEqual(tui.last_paragraph(s.main.last_text), "끝났습니다")
 
 
+class FolderTest(unittest.TestCase):
+    def test_main_folder_prefers_used_project_over_start_folder(self):
+        W = "/w"
+        mf = model.main_folder
+        self.assertEqual(mf(W, {W: 278, W + "/ws/a/x": 153, W + "/ws/a": 132, W + "/ws/b": 5}), "/w/ws/a")
+        self.assertEqual(mf(W, {W: 864, W + "/ws/b/repo": 225, W + "/ws/b": 65}), "/w/ws/b")
+        T = "/t/proj"
+        self.assertEqual(mf(T, {T: 204, T + "/lab/runs/x": 33, T + "/other": 5}), "/t/proj")  # 대부분 시작 폴더
+        self.assertEqual(mf(T, {T: 10, T + "/lab/runs/x": 18, T + "/lab": 15}), "/t/proj/lab")
+        self.assertEqual(mf(T, {T: 3}), "/t/proj")
+        # 참고용 repos를 더 많이 읽었어도 작업공간(ws/<이름>)이 10% 이상이면 작업공간
+        self.assertEqual(mf(W, {W: 141, W + "/ws/c": 93, W + "/repos/x": 77, W + "/repos": 72, W + "/repos/y": 79}), "/w/ws/c")
+
+
 class LaunchTest(unittest.TestCase):
     def test_launch_is_remote_or_cli(self):
         L = model.launch_of

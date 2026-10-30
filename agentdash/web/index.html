@@ -53,6 +53,9 @@ header .right { display: flex; justify-content: flex-end; align-items: center; g
 .tile.on { outline: 2px solid var(--line-2); }
 .tile.wait.has { background: var(--amber-bg); }
 .tile.wait.has .v { color: var(--amber-tx); }
+/* 입력 차례 타일은 입력 차례 카드와 같은 색과 움직임 */
+.tile.idle.has { background: linear-gradient(120deg, rgba(255,255,255,.6) 0%, rgba(203,238,231,.85) 35%, rgba(255,240,214,.8) 65%, rgba(255,255,255,.6) 100%); background-size: 300% 300%; animation: idlebg 7s ease-in-out infinite; box-shadow: 0 0 0 2px rgba(31,156,140,.45); }
+.tile.idle.has .v { color: var(--teal-tx); }
 .filters { display: flex; gap: 6px; padding: 6px 24px 14px; justify-content: center; flex-wrap: wrap; }
 .chip-btn { border-radius: 999px; padding: 3px 14px; font-size: 13px; background: rgba(255,255,255,.6); border-color: rgba(255,255,255,.9); }
 .chip-btn.on { background: var(--text); color: #fff; border-color: var(--text); }
@@ -133,7 +136,7 @@ header .right { display: flex; justify-content: flex-end; align-items: center; g
 .l-needs_input { background: var(--amber); animation: blink 2.4s ease-in-out infinite; }
 .l-maybe_waiting { background: var(--amber); }
 .l-maybe_waiting::before { inset: -4px; border: 2px dashed var(--amber); animation: spin 6s linear infinite; opacity: .8; }
-.l-idle { background: transparent; border: 2.5px solid var(--gray); }
+.l-idle { background: transparent; border: 2.5px solid var(--teal); }
 .l-stalled { background: var(--red); }
 .l-stalled::after { inset: -4px; border: 2px solid var(--red); opacity: .35; }
 .l-done { background: var(--green); }
@@ -248,7 +251,7 @@ button.settings:hover { background: linear-gradient(135deg, #5d47c8, #2f68d6); }
 .menu button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; font-weight: 650; padding: 7px 10px; text-align: left; }
 .menu button:hover { background: var(--blue-bg); color: var(--blue-tx); }
 [data-tip] { position: relative; }
-[data-tip]::after { content: attr(data-tip); position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%); width: max-content; max-width: 240px; background: var(--text); color: #fff; font-size: 12px; font-weight: 500; line-height: 1.45; padding: 6px 10px; border-radius: 8px; box-shadow: 0 4px 14px rgba(31,36,48,.2); opacity: 0; pointer-events: none; transition: opacity .15s; white-space: normal; }
+[data-tip]::after { content: attr(data-tip); position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%); width: max-content; max-width: 240px; background: rgba(244,246,250,.94); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--line-2); color: var(--text); font-size: 12px; font-weight: 500; line-height: 1.45; padding: 6px 10px; border-radius: 8px; box-shadow: 0 4px 14px rgba(31,36,48,.2); opacity: 0; pointer-events: none; transition: opacity .15s; white-space: normal; }
 [data-tip]:hover::after, [data-tip]:focus-visible::after { opacity: 1; }
 @media (max-width: 720px) { [data-tip]::after { right: auto; left: 0; top: calc(100% + 6px); transform: none; } }
 .lastmsg { background: rgba(255,255,255,.8); border: 1px solid var(--line); border-left: 3px solid var(--teal); border-radius: 10px; padding: 7px 10px; cursor: pointer; }
@@ -272,7 +275,7 @@ button.primary:hover { background: #343b4a; }
 .dirs { display: flex; gap: 6px; margin: 8px 0; }
 .dirs input { flex: 1; font: inherit; padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 8px; }
 .dir-item { display: flex; gap: 8px; align-items: center; font-size: 12.5px; padding: 2px 0; }
-.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--text); color: #fff; padding: 6px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: rgba(244,246,250,.95); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--line-2); box-shadow: 0 6px 18px rgba(31,36,48,.12); color: var(--text); padding: 6px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .toast.show { opacity: 1; }
 @media (max-width: 720px) {
   header { grid-template-columns: 1fr; text-align: center; }
@@ -491,7 +494,7 @@ function renderSummary() {
   const tiles = [
     ["wait", "사용자 대기", sm.waiting, `wait ${sm.waiting ? "has" : ""}`, light(sm.waiting ? "needs_input" : "idle")],
     ["running", "실행 중", sm.running, "", light(sm.running ? "running" : "idle")],
-    ["idle", "입력 차례", sm.idle, "", light("idle")],
+    ["idle", "입력 차례", sm.idle, `idle ${sm.idle ? "has" : ""}`, light("idle")],
     ["all", "오늘 토큰", fmtTok(sm.tokens_today), "", icon("coins")],
   ];
   $("summary").innerHTML = tiles.map(([f, k, v, c, ic]) =>

@@ -75,6 +75,8 @@ class Transcript:
         self.error_streak: tuple[str, int] = ("", 0)
         self.plan = Plan()
         self.last_turn_ts: str | None = None
+        self.cwd_first: str | None = None
+        self.cwd_counts: dict[str, int] = {}
         self.last_text: str | None = None
         self.last_text_id = None
         self.last_text_ts: str | None = None
@@ -127,6 +129,10 @@ class Transcript:
         for k in ("entrypoint", "cwd", "gitBranch", "version", "sessionId", "agentId"):
             if r.get(k):
                 self.meta[k] = r[k]
+        if r.get("cwd"):
+            # 세션이 거쳐 간 폴더. 시작 폴더는 재개 명령에, 많이 쓴 폴더는 카드 표시와 하위 세션 연결에 쓴다.
+            self.cwd_first = self.cwd_first or r["cwd"]
+            self.cwd_counts[r["cwd"]] = self.cwd_counts.get(r["cwd"], 0) + 1
         if ts:
             self.first_ts = self.first_ts or ts
             self.last_ts = ts
